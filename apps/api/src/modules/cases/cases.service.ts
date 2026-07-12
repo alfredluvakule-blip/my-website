@@ -10,6 +10,7 @@ import {
   totalCrossClampMinutes,
   pumpFlow,
   recommendedCardiacIndex,
+  estimatedBloodVolume,
 } from '@perfusio/clinical';
 import type { CaseCreate, CaseUpdate, PaginationQuery } from '@perfusio/contracts';
 import { prisma } from '../../platform/db.js';
@@ -67,16 +68,32 @@ export const casesService = {
       targetFlowLmin = Number(pumpFlow(ci, Number(patient.bsaM2)).toFixed(2));
     }
 
+    // JKCI "PATIENT BLOOD VOLUME" — derive Nadler EBV when not supplied.
+    const patientBloodVolumeMl =
+      input.patientBloodVolumeMl ??
+      Math.round(
+        estimatedBloodVolume(
+          Number(patient.weightKg),
+          Number(patient.heightCm),
+          patient.sex === 'MALE' ? 'male' : patient.sex === 'FEMALE' ? 'female' : 'unknown',
+        ),
+      );
+
     const created = await prisma.case.create({
       data: {
         hospitalId: ctx.hospitalId,
         patientId: input.patientId,
+        perfNo: input.perfNo ?? null,
         procedure: input.procedure,
         operatingRoom: input.operatingRoom ?? null,
         scheduledDate: input.scheduledDate,
         priority: input.priority,
         isRedo: input.isRedo,
         status: input.status,
+        inductionTime: input.inductionTime ?? null,
+        cuttingTime: input.cuttingTime ?? null,
+        heparinTime: input.heparinTime ?? null,
+        patientBloodVolumeMl,
         notes: input.notes ?? null,
         surgeonId: input.surgeonId ?? null,
         perfusionistId: input.perfusionistId ?? null,

@@ -75,6 +75,30 @@ export const openapiSpec = {
       get: { summary: 'List timeline events', responses: { '200': { description: 'Events' } } },
       post: { summary: 'Add a timeline event (recomputes CPB/clamp durations)', responses: { '201': { description: 'Created' } } },
     },
+    '/cases/{caseId}/intervals': {
+      get: { summary: 'List CPB/cross-clamp/hot-blood/TCA intervals (JKCI ON/OFF/TOTAL)', responses: { '200': { description: 'Intervals' } } },
+      post: { summary: 'Add an interval (TOTAL derived from ON/OFF)', responses: { '201': { description: 'Created' } } },
+    },
+    '/cases/{caseId}/site-pressures': {
+      get: { summary: 'List site pressures/saturations (JKCI SITE/SAT/PRESS)', responses: { '200': { description: 'Site pressures' } } },
+      post: { summary: 'Add a site pressure/saturation reading', responses: { '201': { description: 'Created' } } },
+    },
+    '/cases/{caseId}/act-checkpoints': {
+      get: { summary: 'List ACT checkpoints (JKCI A.C.T table)', responses: { '200': { description: 'ACT checkpoints' } } },
+      post: { summary: 'Add an ACT checkpoint (baseline/post-heparin/on-pump/post-protamine)', responses: { '201': { description: 'Created' } } },
+    },
+    '/cases/{caseId}/blood-products': {
+      get: { summary: 'List blood products transfused', responses: { '200': { description: 'Blood products' } } },
+      post: { summary: 'Record a blood product with unit number', responses: { '201': { description: 'Created' } } },
+    },
+    '/cases/{caseId}/drugs': {
+      get: { summary: 'List drugs pre & during pump', responses: { '200': { description: 'Drugs' } } },
+      post: { summary: 'Record an intraoperative drug', responses: { '201': { description: 'Created' } } },
+    },
+    '/cases/{caseId}/fluid-balance': {
+      get: { summary: 'List fluid balance intake/output entries', responses: { '200': { description: 'Fluid entries' } } },
+      post: { summary: 'Add a fluid balance line item', responses: { '201': { description: 'Created' } } },
+    },
     '/equipment': {
       get: { summary: 'List equipment library items', responses: { '200': { description: 'Items' } } },
       post: { summary: 'Add an equipment item', responses: { '201': { description: 'Created' } } },

@@ -14,9 +14,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   const hospital = await prisma.hospital.upsert({
-    where: { code: 'DEMO' },
+    where: { code: 'JKCI' },
     update: {},
-    create: { name: 'Demo Cardiac Centre', code: 'DEMO' },
+    create: { name: 'Jakaya Kikwete Cardiac Institute', code: 'JKCI', timezone: 'Africa/Dar_es_Salaam' },
   });
 
   const admin = await prisma.profile.upsert({
@@ -25,8 +25,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       hospitalId: hospital.id,
-      email: 'admin@demo.perfusio.local',
-      fullName: 'Demo Administrator',
+      email: 'admin@jkci.perfusio.local',
+      fullName: 'JKCI Administrator',
       role: 'ADMINISTRATOR',
     },
   });
@@ -37,8 +37,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000002',
       hospitalId: hospital.id,
-      email: 'perfusionist@demo.perfusio.local',
-      fullName: 'Demo Perfusionist',
+      email: 'perfusionist@jkci.perfusio.local',
+      fullName: 'JKCI Perfusionist',
       role: 'PERFUSIONIST',
     },
   });
@@ -51,6 +51,7 @@ async function main() {
     create: {
       hospitalId: hospital.id,
       hospitalNumber: 'MRN-0001',
+      registrationNumber: 'REG-2026-0001',
       name: 'Demo Patient',
       age: 61,
       sex: 'MALE',
@@ -67,13 +68,34 @@ async function main() {
     data: {
       hospitalId: hospital.id,
       patientId: patient.id,
+      perfNo: 'PERF-2026-0001',
       procedure: 'CABG x3',
       operatingRoom: 'OR 2',
       scheduledDate: new Date(),
       priority: 'ELECTIVE',
       status: 'SCHEDULED',
+      patientBloodVolumeMl: 5100,
       surgeonId: admin.id,
       perfusionistId: perfusionist.id,
+    },
+  });
+
+  // A couple of JKCI structured sub-records for the demo case.
+  await prisma.actCheckpointRecord.createMany({
+    data: [
+      { caseId: kase.id, checkpoint: 'BASELINE', actSeconds: 120, measuredAt: new Date() },
+      { caseId: kase.id, checkpoint: 'POST_HEPARIN', actSeconds: 540, measuredAt: new Date(Date.now() + 25 * 60000) },
+    ],
+  });
+  await prisma.oxygenator.create({
+    data: {
+      caseId: kase.id,
+      manufacturer: 'Getinge',
+      model: 'Quadrox-i Adult',
+      serialNumber: 'SN-QX-88213',
+      surfaceAreaM2: 1.8,
+      maxFlowLmin: 7,
+      primeVolumeMl: 250,
     },
   });
 

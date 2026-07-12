@@ -76,6 +76,7 @@ export const monitoringService = {
           cvp: input.cvp ?? null,
           nasopharyngealTempC: input.nasopharyngealTempC ?? null,
           bladderTempC: input.bladderTempC ?? null,
+          oxygenatorTempC: input.oxygenatorTempC ?? null,
           pumpFlowLmin: input.pumpFlowLmin ?? null,
           pumpRpm: input.pumpRpm ?? null,
           arterialLinePressure: input.arterialLinePressure ?? null,

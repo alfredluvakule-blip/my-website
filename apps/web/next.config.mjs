@@ -7,9 +7,7 @@ const nextConfig = {
   outputFileTracingRoot: new URL('../../', import.meta.url).pathname,
   // Compile the shared workspace packages from source.
   transpilePackages: ['@perfusio/clinical', '@perfusio/contracts'],
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
 };
 
 export default nextConfig;

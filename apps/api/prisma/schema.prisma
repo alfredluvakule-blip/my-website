@@ -125,6 +125,54 @@ enum TimelineEventType {
   CUSTOM
 }
 
+enum CpbIntervalType {
+  CPB
+  CROSSCLAMP
+  HOT_BLOOD
+  TCA
+}
+
+enum MonitoringSite {
+  SVC
+  IVC
+  RA
+  MAIN_PA
+  LEFT_PA
+  RIGHT_PA
+  LA
+  LV
+  AO
+}
+
+enum ActCheckpointType {
+  BASELINE
+  POST_HEPARIN
+  ON_PUMP
+  POST_PROTAMINE
+}
+
+enum FluidDirection {
+  INTAKE
+  OUTPUT
+}
+
+enum FluidIntakeType {
+  PRIME_SOLUTION
+  BLOOD
+  SODIUM_CHLORIDE
+  PLASMALYTE
+  MANNITOL
+  OTHER
+}
+
+enum FluidOutputType {
+  FAST
+  URINE
+  ULTRAFILTRATION
+  HEMOFILTRATION
+  OTHER
+}
+
 enum EquipmentCategory {
   CANNULA
   OXYGENATOR
@@ -209,6 +257,8 @@ model Patient {
   id             String     @id @default(uuid()) @db.Uuid
   hospitalId     String     @db.Uuid
   hospitalNumber String
+  /// JKCI "REG" — hospital registration number, distinct from the ward MRN.
+  registrationNumber String?
   /// PHI columns are AES-256-GCM encrypted at the application layer.
   name           String
   dateOfBirth    DateTime?
@@ -239,12 +289,19 @@ model Case {
   id                     String     @id @default(uuid()) @db.Uuid
   hospitalId             String     @db.Uuid
   patientId              String     @db.Uuid
+  /// JKCI "PERF NO" — human-facing perfusion record number.
+  perfNo                 String?
   procedure              String
   operatingRoom          String?
   scheduledDate          DateTime
   priority               Priority   @default(ELECTIVE)
   isRedo                 Boolean    @default(false)
   status                 CaseStatus @default(SCHEDULED)
+  // JKCI header timings and blood volume.
+  inductionTime          DateTime?
+  cuttingTime            DateTime?
+  heparinTime            DateTime?
+  patientBloodVolumeMl   Int?
   notes                  String?
 
   surgeonId              String?    @db.Uuid
@@ -277,6 +334,12 @@ model Case {
   timeline          TimelineEntry[]
   monitoring        MonitoringRecord[]
   alerts            Alert[]
+  intervals         CpbInterval[]
+  sitePressures     SitePressure[]
+  actCheckpoints    ActCheckpointRecord[]
+  bloodProducts     BloodProduct[]
+  intraopDrugs      IntraopDrug[]
+  fluidEntries      FluidBalanceEntry[]
 
   @@index([hospitalId, status])
   @@index([hospitalId, scheduledDate])
@@ -313,6 +376,8 @@ model Oxygenator {
   caseId         String    @unique @db.Uuid
   manufacturer   String
   model          String
+  /// JKCI "S/N" — device serial number for traceability.
+  serialNumber   String?
   surfaceAreaM2  Decimal?  @db.Decimal(3, 1)
   primeVolumeMl  Int?
   maxFlowLmin    Decimal?  @db.Decimal(4, 1)
@@ -410,6 +475,7 @@ model MonitoringRecord {
   cvp                  Decimal? @db.Decimal(4, 1)
   nasopharyngealTempC  Decimal? @db.Decimal(3, 1)
   bladderTempC         Decimal? @db.Decimal(3, 1)
+  oxygenatorTempC      Decimal? @db.Decimal(3, 1)
   pumpFlowLmin         Decimal? @db.Decimal(4, 2)
   pumpRpm              Int?
   arterialLinePressure Decimal? @db.Decimal(5, 1)
@@ -465,6 +531,106 @@ model Alert {
 
   @@index([caseId, triggeredAt])
   @@map("alerts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JKCI structured sub-records
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The JKCI ON/OFF/TOTAL table: CPB, cross-clamp, hot-blood and TCA intervals.
+/// totalMin is derived by the API from onAt/offAt so it can never disagree.
+model CpbInterval {
+  id       String          @id @default(uuid()) @db.Uuid
+  caseId   String          @db.Uuid
+  type     CpbIntervalType
+  onAt     DateTime
+  offAt    DateTime?
+  totalMin Int?
+  createdAt DateTime       @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, type])
+  @@map("cpb_intervals")
+}
+
+/// The JKCI SITE / SAT / PRESS table — pressure and saturation by anatomical site.
+model SitePressure {
+  id                String         @id @default(uuid()) @db.Uuid
+  caseId            String         @db.Uuid
+  site              MonitoringSite
+  saturationPercent Decimal?       @db.Decimal(4, 1)
+  pressureMmhg      Decimal?       @db.Decimal(5, 1)
+  measuredAt        DateTime?
+  createdAt         DateTime       @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, site])
+  @@map("site_pressures")
+}
+
+/// The JKCI A.C.T table: baseline / post-heparin / on-pump / post-protamine.
+model ActCheckpointRecord {
+  id         String            @id @default(uuid()) @db.Uuid
+  caseId     String            @db.Uuid
+  checkpoint ActCheckpointType
+  actSeconds Int
+  measuredAt DateTime
+  createdAt  DateTime          @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, checkpoint])
+  @@map("act_checkpoints")
+}
+
+/// Blood products transfused (JKCI UNIT No / BLOOD PRODUCTS / TIME).
+model BloodProduct {
+  id         String   @id @default(uuid()) @db.Uuid
+  caseId     String   @db.Uuid
+  product    String
+  unitNumber String?
+  volumeMl   Int?
+  givenAt    DateTime
+  createdAt  DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("blood_products")
+}
+
+/// Drugs pre & during pump (JKCI DRUG / QUANTITY / TIME).
+model IntraopDrug {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  drug      String
+  quantity  String
+  givenAt   DateTime
+  createdAt DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("intraop_drugs")
+}
+
+/// Fluid balance line items (JKCI Intake / Out put table).
+model FluidBalanceEntry {
+  id         String           @id @default(uuid()) @db.Uuid
+  caseId     String           @db.Uuid
+  direction  FluidDirection
+  intakeType FluidIntakeType?
+  outputType FluidOutputType?
+  volumeMl   Int
+  recordedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, direction])
+  @@map("fluid_balance_entries")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -56,6 +56,7 @@ export const patientsService = {
         data: {
           hospitalId: ctx.hospitalId,
           hospitalNumber: input.hospitalNumber,
+          registrationNumber: input.registrationNumber ?? null,
           name: input.name,
           dateOfBirth: input.dateOfBirth ?? null,
           age: input.age ?? null,
