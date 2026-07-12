@@ -1,0 +1,18 @@
+{
+  "name": "Perfusio — CPB Perfusion Record",
+  "short_name": "Perfusio",
+  "description": "Hospital-grade cardiopulmonary bypass perfusion recording and monitoring.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#e8edf1",
+  "theme_color": "#12609b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

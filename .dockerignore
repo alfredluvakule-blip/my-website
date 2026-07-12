@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/.turbo
+.git
+*.log
+.env
+.env.*
+Healthcare Platform Hi-Fi Design.zip
+files.zip
+PerfCalc TZ - standalone.html
