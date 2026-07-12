@@ -12,7 +12,7 @@ import { Sex, BloodGroup, CaseStatus, Priority } from './enums.js';
 export const patientCreateSchema = z.object({
   hospitalNumber: z.string().min(1, 'Hospital number is required').max(64),
   name: z.string().min(1, 'Patient name is required').max(200),
-  /** JKCI "REG" — hospital registration number, distinct from the ward MRN. */
+  /** BMH "REG" — hospital registration number, distinct from the ward MRN. */
   registrationNumber: z.string().max(64).optional(),
   dateOfBirth: z.coerce.date().optional(),
   age: z.number().int().min(0).max(130).optional(),
@@ -31,7 +31,7 @@ export type PatientUpdate = z.infer<typeof patientUpdateSchema>;
 
 export const caseCreateSchema = z.object({
   patientId: z.string().uuid(),
-  /** JKCI "PERF NO" — the human-facing perfusion record number. */
+  /** BMH "PERF NO" — the human-facing perfusion record number. */
   perfNo: z.string().max(64).optional(),
   procedure: z.string().min(1).max(500),
   surgeonId: z.string().uuid().optional(),
@@ -43,7 +43,7 @@ export const caseCreateSchema = z.object({
   priority: Priority.default('ELECTIVE'),
   isRedo: z.boolean().default(false),
   status: CaseStatus.default('SCHEDULED'),
-  // JKCI header timings and blood volume.
+  // BMH header timings and blood volume.
   inductionTime: z.coerce.date().optional(),
   cuttingTime: z.coerce.date().optional(),
   heparinTime: z.coerce.date().optional(),

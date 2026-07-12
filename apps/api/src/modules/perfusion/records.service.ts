@@ -1,5 +1,5 @@
 /**
- * JKCI structured sub-records: the ON/OFF/TOTAL interval table, SITE/SAT/PRESS
+ * BMH structured sub-records: the ON/OFF/TOTAL interval table, SITE/SAT/PRESS
  * table, A.C.T checkpoints, blood products, intraop drugs, and fluid balance.
  *
  * CpbInterval totals are derived from onAt/offAt by @perfusio/clinical so the

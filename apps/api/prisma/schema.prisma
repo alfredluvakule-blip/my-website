@@ -257,7 +257,7 @@ model Patient {
   id             String     @id @default(uuid()) @db.Uuid
   hospitalId     String     @db.Uuid
   hospitalNumber String
-  /// JKCI "REG" — hospital registration number, distinct from the ward MRN.
+  /// BMH "REG" — hospital registration number, distinct from the ward MRN.
   registrationNumber String?
   /// PHI columns are AES-256-GCM encrypted at the application layer.
   name           String
@@ -289,7 +289,7 @@ model Case {
   id                     String     @id @default(uuid()) @db.Uuid
   hospitalId             String     @db.Uuid
   patientId              String     @db.Uuid
-  /// JKCI "PERF NO" — human-facing perfusion record number.
+  /// BMH "PERF NO" — human-facing perfusion record number.
   perfNo                 String?
   procedure              String
   operatingRoom          String?
@@ -297,7 +297,7 @@ model Case {
   priority               Priority   @default(ELECTIVE)
   isRedo                 Boolean    @default(false)
   status                 CaseStatus @default(SCHEDULED)
-  // JKCI header timings and blood volume.
+  // BMH header timings and blood volume.
   inductionTime          DateTime?
   cuttingTime            DateTime?
   heparinTime            DateTime?
@@ -376,7 +376,7 @@ model Oxygenator {
   caseId         String    @unique @db.Uuid
   manufacturer   String
   model          String
-  /// JKCI "S/N" — device serial number for traceability.
+  /// BMH "S/N" — device serial number for traceability.
   serialNumber   String?
   surfaceAreaM2  Decimal?  @db.Decimal(3, 1)
   primeVolumeMl  Int?
@@ -534,10 +534,10 @@ model Alert {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JKCI structured sub-records
+// BMH structured sub-records
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The JKCI ON/OFF/TOTAL table: CPB, cross-clamp, hot-blood and TCA intervals.
+/// The BMH ON/OFF/TOTAL table: CPB, cross-clamp, hot-blood and TCA intervals.
 /// totalMin is derived by the API from onAt/offAt so it can never disagree.
 model CpbInterval {
   id       String          @id @default(uuid()) @db.Uuid
@@ -554,7 +554,7 @@ model CpbInterval {
   @@map("cpb_intervals")
 }
 
-/// The JKCI SITE / SAT / PRESS table — pressure and saturation by anatomical site.
+/// The BMH SITE / SAT / PRESS table — pressure and saturation by anatomical site.
 model SitePressure {
   id                String         @id @default(uuid()) @db.Uuid
   caseId            String         @db.Uuid
@@ -570,7 +570,7 @@ model SitePressure {
   @@map("site_pressures")
 }
 
-/// The JKCI A.C.T table: baseline / post-heparin / on-pump / post-protamine.
+/// The BMH A.C.T table: baseline / post-heparin / on-pump / post-protamine.
 model ActCheckpointRecord {
   id         String            @id @default(uuid()) @db.Uuid
   caseId     String            @db.Uuid
@@ -585,7 +585,7 @@ model ActCheckpointRecord {
   @@map("act_checkpoints")
 }
 
-/// Blood products transfused (JKCI UNIT No / BLOOD PRODUCTS / TIME).
+/// Blood products transfused (BMH UNIT No / BLOOD PRODUCTS / TIME).
 model BloodProduct {
   id         String   @id @default(uuid()) @db.Uuid
   caseId     String   @db.Uuid
@@ -601,7 +601,7 @@ model BloodProduct {
   @@map("blood_products")
 }
 
-/// Drugs pre & during pump (JKCI DRUG / QUANTITY / TIME).
+/// Drugs pre & during pump (BMH DRUG / QUANTITY / TIME).
 model IntraopDrug {
   id        String   @id @default(uuid()) @db.Uuid
   caseId    String   @db.Uuid
@@ -616,7 +616,7 @@ model IntraopDrug {
   @@map("intraop_drugs")
 }
 
-/// Fluid balance line items (JKCI Intake / Out put table).
+/// Fluid balance line items (BMH Intake / Out put table).
 model FluidBalanceEntry {
   id         String           @id @default(uuid()) @db.Uuid
   caseId     String           @db.Uuid

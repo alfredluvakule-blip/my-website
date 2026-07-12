@@ -1,6 +1,6 @@
-# JKCI paper form → Perfusio data model
+# BMH paper form → Perfusio data model
 
-This maps every field on the Jakaya Kikwete Cardiac Institute **Cardiopulmonary
+This maps every field on the Benjamin Mkapa Hospital **Cardiopulmonary
 Bypass Perfusion Records** paper form (both sides) to where it lives in Perfusio.
 It is the reference for keeping the digital record faithful to the paper one.
 

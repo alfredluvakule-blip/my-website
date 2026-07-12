@@ -39,7 +39,7 @@ export type Cannula = z.infer<typeof cannulaSchema>;
 export const oxygenatorSchema = z.object({
   manufacturer: z.string().max(200),
   model: z.string().max(200),
-  /** JKCI "S/N" — device serial number, recorded for traceability. */
+  /** BMH "S/N" — device serial number, recorded for traceability. */
   serialNumber: z.string().max(120).optional(),
   surfaceAreaM2: z.number().positive().max(5).optional(),
   primeVolumeMl: z.number().nonnegative().max(2000).optional(),
@@ -165,14 +165,14 @@ export const monitoringRecordSchema = z.object({
   cvp: z.number().min(-10).max(50).optional(),
   nasopharyngealTempC: z.number().min(10).max(42).optional(),
   bladderTempC: z.number().min(10).max(42).optional(),
-  /** JKCI "OXY TEMP" — oxygenator (arterial outlet) temperature. */
+  /** BMH "OXY TEMP" — oxygenator (arterial outlet) temperature. */
   oxygenatorTempC: z.number().min(10).max(42).optional(),
   pumpFlowLmin: z.number().min(0).max(12).optional(),
   pumpRpm: z.number().int().min(0).max(5000).optional(),
   arterialLinePressure: z.number().min(0).max(600).optional(),
   venousLinePressure: z.number().min(-200).max(100).optional(),
   reservoirLevelMl: z.number().min(0).max(6000).optional(),
-  /** JKCI "GAS FLOW" — sweep gas to the oxygenator. */
+  /** BMH "GAS FLOW" — sweep gas to the oxygenator. */
   sweepGasLmin: z.number().min(0).max(15).optional(),
   fio2: z.number().min(0.21).max(1).optional(),
   svo2: z.number().min(0).max(100).optional(),

@@ -98,7 +98,7 @@ export const TimelineEvent = z.enum([
 export type TimelineEvent = z.infer<typeof TimelineEvent>;
 
 /**
- * Timed intervals recorded in the JKCI ON/OFF/TOTAL table. Each has a start
+ * Timed intervals recorded in the BMH ON/OFF/TOTAL table. Each has a start
  * (ON), an end (OFF) and a derived total. CPB and CROSSCLAMP overlap the
  * timeline events; HOT_BLOOD (hot-shot / terminal warm blood cardioplegia) and
  * TCA (total circulatory arrest) are distinct clamp-style intervals.
@@ -107,7 +107,7 @@ export const CpbIntervalType = z.enum(['CPB', 'CROSSCLAMP', 'HOT_BLOOD', 'TCA'])
 export type CpbIntervalType = z.infer<typeof CpbIntervalType>;
 
 /**
- * Anatomical monitoring sites for the JKCI SITE / SAT / PRESS table — used for
+ * Anatomical monitoring sites for the BMH SITE / SAT / PRESS table — used for
  * pressure and saturation sampling, important in congenital/paediatric work.
  */
 export const MonitoringSite = z.enum([
@@ -123,11 +123,11 @@ export const MonitoringSite = z.enum([
 ]);
 export type MonitoringSite = z.infer<typeof MonitoringSite>;
 
-/** Named ACT checkpoints from the JKCI A.C.T table. */
+/** Named ACT checkpoints from the BMH A.C.T table. */
 export const ActCheckpoint = z.enum(['BASELINE', 'POST_HEPARIN', 'ON_PUMP', 'POST_PROTAMINE']);
 export type ActCheckpoint = z.infer<typeof ActCheckpoint>;
 
-/** Fluid balance intake categories, matching the JKCI form. */
+/** Fluid balance intake categories, matching the BMH form. */
 export const FluidIntakeType = z.enum([
   'PRIME_SOLUTION',
   'BLOOD',
@@ -138,7 +138,7 @@ export const FluidIntakeType = z.enum([
 ]);
 export type FluidIntakeType = z.infer<typeof FluidIntakeType>;
 
-/** Fluid balance output categories, matching the JKCI form. */
+/** Fluid balance output categories, matching the BMH form. */
 export const FluidOutputType = z.enum([
   'FAST', // rapid volume removal
   'URINE',

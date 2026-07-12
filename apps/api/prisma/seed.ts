@@ -14,9 +14,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   const hospital = await prisma.hospital.upsert({
-    where: { code: 'JKCI' },
+    where: { code: 'BMH' },
     update: {},
-    create: { name: 'Jakaya Kikwete Cardiac Institute', code: 'JKCI', timezone: 'Africa/Dar_es_Salaam' },
+    create: { name: 'Benjamin Mkapa Hospital', code: 'BMH', timezone: 'Africa/Dar_es_Salaam' },
   });
 
   const admin = await prisma.profile.upsert({
@@ -25,8 +25,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000001',
       hospitalId: hospital.id,
-      email: 'admin@jkci.perfusio.local',
-      fullName: 'JKCI Administrator',
+      email: 'admin@bmh.perfusio.local',
+      fullName: 'BMH Administrator',
       role: 'ADMINISTRATOR',
     },
   });
@@ -37,8 +37,8 @@ async function main() {
     create: {
       id: '00000000-0000-0000-0000-000000000002',
       hospitalId: hospital.id,
-      email: 'perfusionist@jkci.perfusio.local',
-      fullName: 'JKCI Perfusionist',
+      email: 'perfusionist@bmh.perfusio.local',
+      fullName: 'BMH Perfusionist',
       role: 'PERFUSIONIST',
     },
   });
@@ -80,7 +80,7 @@ async function main() {
     },
   });
 
-  // A couple of JKCI structured sub-records for the demo case.
+  // A couple of BMH structured sub-records for the demo case.
   await prisma.actCheckpointRecord.createMany({
     data: [
       { caseId: kase.id, checkpoint: 'BASELINE', actSeconds: 120, measuredAt: new Date() },

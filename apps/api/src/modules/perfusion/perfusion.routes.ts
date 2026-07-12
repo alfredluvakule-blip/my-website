@@ -85,7 +85,7 @@ perfusionRouter.delete(
   }),
 );
 
-// ── JKCI structured sub-records ──────────────────────────────────────────────
+// ── BMH structured sub-records ──────────────────────────────────────────────
 // Each resource shares the same list/create shape, so it is registered from a
 // small table to avoid repeating boilerplate per endpoint.
 type Ctx = ReturnType<typeof auditCtx>;

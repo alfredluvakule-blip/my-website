@@ -68,7 +68,7 @@ export const casesService = {
       targetFlowLmin = Number(pumpFlow(ci, Number(patient.bsaM2)).toFixed(2));
     }
 
-    // JKCI "PATIENT BLOOD VOLUME" — derive Nadler EBV when not supplied.
+    // BMH "PATIENT BLOOD VOLUME" — derive Nadler EBV when not supplied.
     const patientBloodVolumeMl =
       input.patientBloodVolumeMl ??
       Math.round(

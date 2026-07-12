@@ -76,15 +76,15 @@ export const openapiSpec = {
       post: { summary: 'Add a timeline event (recomputes CPB/clamp durations)', responses: { '201': { description: 'Created' } } },
     },
     '/cases/{caseId}/intervals': {
-      get: { summary: 'List CPB/cross-clamp/hot-blood/TCA intervals (JKCI ON/OFF/TOTAL)', responses: { '200': { description: 'Intervals' } } },
+      get: { summary: 'List CPB/cross-clamp/hot-blood/TCA intervals (BMH ON/OFF/TOTAL)', responses: { '200': { description: 'Intervals' } } },
       post: { summary: 'Add an interval (TOTAL derived from ON/OFF)', responses: { '201': { description: 'Created' } } },
     },
     '/cases/{caseId}/site-pressures': {
-      get: { summary: 'List site pressures/saturations (JKCI SITE/SAT/PRESS)', responses: { '200': { description: 'Site pressures' } } },
+      get: { summary: 'List site pressures/saturations (BMH SITE/SAT/PRESS)', responses: { '200': { description: 'Site pressures' } } },
       post: { summary: 'Add a site pressure/saturation reading', responses: { '201': { description: 'Created' } } },
     },
     '/cases/{caseId}/act-checkpoints': {
-      get: { summary: 'List ACT checkpoints (JKCI A.C.T table)', responses: { '200': { description: 'ACT checkpoints' } } },
+      get: { summary: 'List ACT checkpoints (BMH A.C.T table)', responses: { '200': { description: 'ACT checkpoints' } } },
       post: { summary: 'Add an ACT checkpoint (baseline/post-heparin/on-pump/post-protamine)', responses: { '201': { description: 'Created' } } },
     },
     '/cases/{caseId}/blood-products': {
