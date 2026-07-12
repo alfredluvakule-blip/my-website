@@ -1,0 +1,683 @@
+// Perfusio — Prisma schema for the Cardiopulmonary Bypass Perfusion Record.
+//
+// Design notes:
+//  • Multi-tenant by hospital. Every clinical row carries hospitalId.
+//  • Soft-delete (deletedAt) everywhere clinical — records are never hard-deleted.
+//  • The API is the only writer; it sets Postgres session context so the SQL-level
+//    RLS policies (see supabase/migrations) act as defense in depth.
+//  • Derived clinical values (bsaM2, bmi, etc.) are computed by @perfusio/clinical
+//    and stored for reporting; they are never accepted from the client.
+//  • Audit trail lives in AuditLog; signed/immutable data is enforced in SQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+enum UserRole {
+  ADMINISTRATOR
+  PERFUSIONIST
+  CONSULTANT
+  CARDIAC_SURGEON
+  ANESTHESIOLOGIST
+  NURSE
+  RESIDENT
+  STUDENT
+  RESEARCHER
+  GUEST
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+enum CaseStatus {
+  SCHEDULED
+  IN_OR
+  ON_BYPASS
+  WEANING
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  ELECTIVE
+  URGENT
+  EMERGENCY
+}
+
+enum BloodGroup {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+  UNKNOWN
+}
+
+enum CannulaType {
+  ARTERIAL
+  VENOUS
+  CARDIOPLEGIA
+  VENT
+}
+
+enum VenousCannulaConfig {
+  SINGLE
+  DOUBLE
+  TWO_STAGE
+  FEMORAL
+  SVC
+  IVC
+}
+
+enum CardioplegiaType {
+  BLOOD
+  CRYSTALLOID
+  DEL_NIDO
+  ST_THOMAS
+  CUSTODIOL
+}
+
+enum CardioplegiaRoute {
+  ANTEGRADE
+  RETROGRADE
+  CORONARY_OSTIAL
+  GRAFT
+}
+
+enum CardioplegiaTemp {
+  COLD
+  WARM
+  TEPID
+}
+
+enum TimelineEventType {
+  PATIENT_IN_OR
+  ANESTHESIA_START
+  INCISION
+  HEPARIN_GIVEN
+  ACT_MEASURED
+  CANNULATION
+  CPB_START
+  CROSS_CLAMP_ON
+  CARDIOPLEGIA_GIVEN
+  CROSS_CLAMP_OFF
+  WEANING_START
+  CPB_END
+  DECANNULATION
+  PROTAMINE_GIVEN
+  CASE_COMPLETED
+  CUSTOM
+}
+
+enum CpbIntervalType {
+  CPB
+  CROSSCLAMP
+  HOT_BLOOD
+  TCA
+}
+
+enum MonitoringSite {
+  SVC
+  IVC
+  RA
+  MAIN_PA
+  LEFT_PA
+  RIGHT_PA
+  LA
+  LV
+  AO
+}
+
+enum ActCheckpointType {
+  BASELINE
+  POST_HEPARIN
+  ON_PUMP
+  POST_PROTAMINE
+}
+
+enum FluidDirection {
+  INTAKE
+  OUTPUT
+}
+
+enum FluidIntakeType {
+  PRIME_SOLUTION
+  BLOOD
+  SODIUM_CHLORIDE
+  PLASMALYTE
+  MANNITOL
+  OTHER
+}
+
+enum FluidOutputType {
+  FAST
+  URINE
+  ULTRAFILTRATION
+  HEMOFILTRATION
+  OTHER
+}
+
+enum EquipmentCategory {
+  CANNULA
+  OXYGENATOR
+  FILTER
+  RESERVOIR
+  TUBING_PACK
+  HEMOCONCENTRATOR
+  CARDIOPLEGIA_SET
+  CELL_SAVER
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertType {
+  ACT_BELOW_TARGET
+  LOW_FLOW
+  LOW_RESERVOIR
+  HIGH_ARTERIAL_PRESSURE
+  HIGH_VENOUS_PRESSURE
+  LOW_TEMPERATURE
+  HIGH_TEMPERATURE
+  LOW_HEMATOCRIT
+  HIGH_LACTATE
+  CRITICAL_POTASSIUM
+  LOW_DO2I
+  EXPIRED_EQUIPMENT
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenancy & identity
+// ─────────────────────────────────────────────────────────────────────────────
+model Hospital {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String   @unique
+  timezone  String   @default("Africa/Dar_es_Salaam")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profiles   Profile[]
+  patients   Patient[]
+  cases      Case[]
+  equipment  EquipmentItem[]
+  auditLogs  AuditLog[]
+
+  @@map("hospitals")
+}
+
+/// Mirrors a Supabase Auth user (id = auth.users.id). Never stores passwords.
+model Profile {
+  id         String   @id @db.Uuid
+  hospitalId String   @db.Uuid
+  email      String   @unique
+  fullName   String
+  role       UserRole @default(GUEST)
+  licenseNo  String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  hospital Hospital @relation(fields: [hospitalId], references: [id])
+
+  casesAsSurgeon      Case[] @relation("surgeon")
+  casesAsPerfusionist Case[] @relation("perfusionist")
+  casesAsAnesthetist  Case[] @relation("anesthetist")
+  casesAsAssistant    Case[] @relation("assistant")
+  auditLogs           AuditLog[]
+
+  @@index([hospitalId])
+  @@map("profiles")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Patient & case
+// ─────────────────────────────────────────────────────────────────────────────
+model Patient {
+  id             String     @id @default(uuid()) @db.Uuid
+  hospitalId     String     @db.Uuid
+  hospitalNumber String
+  /// BMH "REG" — hospital registration number, distinct from the ward MRN.
+  registrationNumber String?
+  /// PHI columns are AES-256-GCM encrypted at the application layer.
+  name           String
+  dateOfBirth    DateTime?
+  age            Int?
+  sex            Sex        @default(UNKNOWN)
+  weightKg       Decimal    @db.Decimal(5, 2)
+  heightCm       Decimal    @db.Decimal(5, 1)
+  /// Derived by @perfusio/clinical; stored for reporting, never client-supplied.
+  bsaM2          Decimal?   @db.Decimal(4, 2)
+  bmi            Decimal?   @db.Decimal(4, 1)
+  bloodGroup     BloodGroup @default(UNKNOWN)
+  allergies      String[]   @default([])
+  diagnosis      String?
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  hospital Hospital @relation(fields: [hospitalId], references: [id])
+  cases    Case[]
+
+  @@unique([hospitalId, hospitalNumber])
+  @@index([hospitalId])
+  @@map("patients")
+}
+
+model Case {
+  id                     String     @id @default(uuid()) @db.Uuid
+  hospitalId             String     @db.Uuid
+  patientId              String     @db.Uuid
+  /// BMH "PERF NO" — human-facing perfusion record number.
+  perfNo                 String?
+  procedure              String
+  operatingRoom          String?
+  scheduledDate          DateTime
+  priority               Priority   @default(ELECTIVE)
+  isRedo                 Boolean    @default(false)
+  status                 CaseStatus @default(SCHEDULED)
+  // BMH header timings and blood volume.
+  inductionTime          DateTime?
+  cuttingTime            DateTime?
+  heparinTime            DateTime?
+  patientBloodVolumeMl   Int?
+  notes                  String?
+
+  surgeonId              String?    @db.Uuid
+  perfusionistId         String?    @db.Uuid
+  anesthetistId          String?    @db.Uuid
+  assistantPerfusionistId String?   @db.Uuid
+
+  // Derived run summary — populated as the case progresses.
+  cpbTimeMin        Int?
+  crossClampTimeMin Int?
+  primeVolumeMl     Int?
+  targetFlowLmin    Decimal? @db.Decimal(4, 2)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  hospital     Hospital @relation(fields: [hospitalId], references: [id])
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  surgeon      Profile? @relation("surgeon", fields: [surgeonId], references: [id])
+  perfusionist Profile? @relation("perfusionist", fields: [perfusionistId], references: [id])
+  anesthetist  Profile? @relation("anesthetist", fields: [anesthetistId], references: [id])
+  assistant    Profile? @relation("assistant", fields: [assistantPerfusionistId], references: [id])
+
+  cannulae          Cannula[]
+  oxygenator        Oxygenator?
+  cardioplegiaDoses CardioplegiaDose[]
+  heparinDoses      HeparinDose[]
+  protamineDoses    ProtamineDose[]
+  timeline          TimelineEntry[]
+  monitoring        MonitoringRecord[]
+  alerts            Alert[]
+  intervals         CpbInterval[]
+  sitePressures     SitePressure[]
+  actCheckpoints    ActCheckpointRecord[]
+  bloodProducts     BloodProduct[]
+  intraopDrugs      IntraopDrug[]
+  fluidEntries      FluidBalanceEntry[]
+
+  @@index([hospitalId, status])
+  @@index([hospitalId, scheduledDate])
+  @@index([patientId])
+  @@map("cases")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Circuit setup
+// ─────────────────────────────────────────────────────────────────────────────
+model Cannula {
+  id           String               @id @default(uuid()) @db.Uuid
+  caseId       String               @db.Uuid
+  type         CannulaType
+  venousConfig VenousCannulaConfig?
+  manufacturer String?
+  model        String?
+  sizeFr       Decimal?             @db.Decimal(4, 1)
+  lengthCm     Decimal?             @db.Decimal(5, 1)
+  location     String?
+  lotNumber    String?
+  expiryDate   DateTime?
+  notes        String?
+  createdAt    DateTime             @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("cannulae")
+}
+
+model Oxygenator {
+  id             String    @id @default(uuid()) @db.Uuid
+  caseId         String    @unique @db.Uuid
+  manufacturer   String
+  model          String
+  /// BMH "S/N" — device serial number for traceability.
+  serialNumber   String?
+  surfaceAreaM2  Decimal?  @db.Decimal(3, 1)
+  primeVolumeMl  Int?
+  maxFlowLmin    Decimal?  @db.Decimal(4, 1)
+  hasHeatExchanger Boolean @default(true)
+  lotNumber      String?
+  expiryDate     DateTime?
+  createdAt      DateTime  @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("oxygenators")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cardioplegia & anticoagulation
+// ─────────────────────────────────────────────────────────────────────────────
+model CardioplegiaDose {
+  id            String            @id @default(uuid()) @db.Uuid
+  caseId        String            @db.Uuid
+  type          CardioplegiaType
+  route         CardioplegiaRoute
+  temperature   CardioplegiaTemp
+  volumeMl      Int
+  pressureMmhg  Int?
+  temperatureC  Decimal?          @db.Decimal(3, 1)
+  givenAt       DateTime
+  isRepeat      Boolean           @default(false)
+  notes         String?
+  createdAt     DateTime          @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("cardioplegia_doses")
+}
+
+model HeparinDose {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  doseIu    Int
+  givenAt   DateTime
+  actBefore Int?
+  actAfter  Int?
+  targetAct Int      @default(480)
+  createdAt DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("heparin_doses")
+}
+
+model ProtamineDose {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  doseMg    Decimal  @db.Decimal(6, 1)
+  givenAt   DateTime
+  actAfter  Int?
+  reaction  String?
+  createdAt DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("protamine_doses")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline & monitoring
+// ─────────────────────────────────────────────────────────────────────────────
+model TimelineEntry {
+  id         String            @id @default(uuid()) @db.Uuid
+  caseId     String            @db.Uuid
+  event      TimelineEventType
+  occurredAt DateTime
+  label      String?
+  detail     String?
+  createdAt  DateTime          @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, occurredAt])
+  @@map("timeline_entries")
+}
+
+/// One row per periodic (or manual) intraoperative reading. ABG fields are
+/// inlined rather than a separate table because they are always recorded with
+/// the surrounding hemodynamics and queried together for trend charts.
+model MonitoringRecord {
+  id                   String   @id @default(uuid()) @db.Uuid
+  caseId               String   @db.Uuid
+  recordedAt           DateTime
+  heartRate            Int?
+  map                  Decimal? @db.Decimal(5, 1)
+  cvp                  Decimal? @db.Decimal(4, 1)
+  nasopharyngealTempC  Decimal? @db.Decimal(3, 1)
+  bladderTempC         Decimal? @db.Decimal(3, 1)
+  oxygenatorTempC      Decimal? @db.Decimal(3, 1)
+  pumpFlowLmin         Decimal? @db.Decimal(4, 2)
+  pumpRpm              Int?
+  arterialLinePressure Decimal? @db.Decimal(5, 1)
+  venousLinePressure   Decimal? @db.Decimal(5, 1)
+  reservoirLevelMl     Int?
+  sweepGasLmin         Decimal? @db.Decimal(4, 1)
+  fio2                 Decimal? @db.Decimal(3, 2)
+  svo2                 Decimal? @db.Decimal(4, 1)
+  sao2                 Decimal? @db.Decimal(4, 1)
+  hematocrit           Decimal? @db.Decimal(4, 1)
+  hemoglobin           Decimal? @db.Decimal(4, 1)
+  act                  Int?
+  urineOutputMl        Int?
+  bloodLossMl          Int?
+  // ABG
+  ph                   Decimal? @db.Decimal(4, 2)
+  paco2                Decimal? @db.Decimal(4, 1)
+  pao2                 Decimal? @db.Decimal(5, 1)
+  hco3                 Decimal? @db.Decimal(4, 1)
+  baseExcess           Decimal? @db.Decimal(4, 1)
+  lactate              Decimal? @db.Decimal(4, 1)
+  potassium            Decimal? @db.Decimal(3, 1)
+  sodium               Decimal? @db.Decimal(4, 1)
+  calcium              Decimal? @db.Decimal(3, 2)
+  glucose              Decimal? @db.Decimal(4, 1)
+  // Derived
+  do2i                 Decimal? @db.Decimal(6, 1)
+  cardiacIndex         Decimal? @db.Decimal(4, 2)
+
+  drugsGiven String?
+  comments   String?
+  createdAt  DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, recordedAt])
+  @@map("monitoring_records")
+}
+
+model Alert {
+  id            String        @id @default(uuid()) @db.Uuid
+  caseId        String        @db.Uuid
+  type          AlertType
+  severity      AlertSeverity
+  message       String
+  value         Decimal?      @db.Decimal(8, 2)
+  threshold     Decimal?      @db.Decimal(8, 2)
+  triggeredAt   DateTime      @default(now())
+  acknowledgedAt DateTime?
+  acknowledgedBy String?      @db.Uuid
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, triggeredAt])
+  @@map("alerts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BMH structured sub-records
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The BMH ON/OFF/TOTAL table: CPB, cross-clamp, hot-blood and TCA intervals.
+/// totalMin is derived by the API from onAt/offAt so it can never disagree.
+model CpbInterval {
+  id       String          @id @default(uuid()) @db.Uuid
+  caseId   String          @db.Uuid
+  type     CpbIntervalType
+  onAt     DateTime
+  offAt    DateTime?
+  totalMin Int?
+  createdAt DateTime       @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, type])
+  @@map("cpb_intervals")
+}
+
+/// The BMH SITE / SAT / PRESS table — pressure and saturation by anatomical site.
+model SitePressure {
+  id                String         @id @default(uuid()) @db.Uuid
+  caseId            String         @db.Uuid
+  site              MonitoringSite
+  saturationPercent Decimal?       @db.Decimal(4, 1)
+  pressureMmhg      Decimal?       @db.Decimal(5, 1)
+  measuredAt        DateTime?
+  createdAt         DateTime       @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, site])
+  @@map("site_pressures")
+}
+
+/// The BMH A.C.T table: baseline / post-heparin / on-pump / post-protamine.
+model ActCheckpointRecord {
+  id         String            @id @default(uuid()) @db.Uuid
+  caseId     String            @db.Uuid
+  checkpoint ActCheckpointType
+  actSeconds Int
+  measuredAt DateTime
+  createdAt  DateTime          @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, checkpoint])
+  @@map("act_checkpoints")
+}
+
+/// Blood products transfused (BMH UNIT No / BLOOD PRODUCTS / TIME).
+model BloodProduct {
+  id         String   @id @default(uuid()) @db.Uuid
+  caseId     String   @db.Uuid
+  product    String
+  unitNumber String?
+  volumeMl   Int?
+  givenAt    DateTime
+  createdAt  DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("blood_products")
+}
+
+/// Drugs pre & during pump (BMH DRUG / QUANTITY / TIME).
+model IntraopDrug {
+  id        String   @id @default(uuid()) @db.Uuid
+  caseId    String   @db.Uuid
+  drug      String
+  quantity  String
+  givenAt   DateTime
+  createdAt DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, givenAt])
+  @@map("intraop_drugs")
+}
+
+/// Fluid balance line items (BMH Intake / Out put table).
+model FluidBalanceEntry {
+  id         String           @id @default(uuid()) @db.Uuid
+  caseId     String           @db.Uuid
+  direction  FluidDirection
+  intakeType FluidIntakeType?
+  outputType FluidOutputType?
+  volumeMl   Int
+  recordedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, direction])
+  @@map("fluid_balance_entries")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Equipment library
+// ─────────────────────────────────────────────────────────────────────────────
+model EquipmentItem {
+  id            String            @id @default(uuid()) @db.Uuid
+  hospitalId    String            @db.Uuid
+  category      EquipmentCategory
+  manufacturer  String
+  model         String
+  specification Json?
+  imageUrl      String?
+  lotNumber     String?
+  expiryDate    DateTime?
+  quantityOnHand Int              @default(0)
+  isAvailable   Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  deletedAt     DateTime?
+
+  hospital Hospital @relation(fields: [hospitalId], references: [id])
+
+  @@index([hospitalId, category])
+  @@map("equipment_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit
+// ─────────────────────────────────────────────────────────────────────────────
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  hospitalId String?  @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  hospital Hospital? @relation(fields: [hospitalId], references: [id])
+  actor    Profile?  @relation(fields: [actorId], references: [id])
+
+  @@index([hospitalId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}

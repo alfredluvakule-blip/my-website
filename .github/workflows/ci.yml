@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Build shared packages
+        run: |
+          npm run build --workspace @perfusio/clinical
+          npm run build --workspace @perfusio/contracts
+
+      - name: Generate Prisma client
+        run: npm run db:generate --workspace @perfusio/api
+
+      - name: Typecheck
+        run: |
+          npm run typecheck --workspace @perfusio/clinical
+          npm run typecheck --workspace @perfusio/contracts
+          npm run typecheck --workspace @perfusio/api
+          npm run typecheck --workspace @perfusio/web
+
+      - name: Unit tests
+        run: |
+          npm run test --workspace @perfusio/clinical
+          npm run test --workspace @perfusio/api
+
+      - name: Build web
+        run: npm run build --workspace @perfusio/web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: build-time-dummy
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1

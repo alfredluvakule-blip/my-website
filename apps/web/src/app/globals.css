@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Perfusio theme tokens. Light is the OR default (high contrast, white cards on
+ * a soft blue-grey field). Dark mode dims for low-light monitoring without
+ * losing the clinical blue accent. WCAG AA contrast for text on backgrounds.
+ */
+:root {
+  --background: 205 30% 96%;
+  --foreground: 210 40% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 40% 12%;
+  --primary: 208 84% 34%; /* clinical blue */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 200 30% 90%;
+  --secondary-foreground: 210 40% 20%;
+  --muted: 205 25% 92%;
+  --muted-foreground: 210 15% 40%;
+  --border: 208 25% 84%;
+  --input: 208 25% 84%;
+  --ring: 208 84% 40%;
+  --danger: 0 72% 45%;
+  --danger-foreground: 0 0% 100%;
+  --warning: 38 92% 48%;
+  --warning-foreground: 0 0% 100%;
+  --success: 152 60% 36%;
+  --success-foreground: 0 0% 100%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 210 40% 8%;
+  --foreground: 205 25% 92%;
+  --card: 210 38% 12%;
+  --card-foreground: 205 25% 92%;
+  --primary: 205 86% 56%;
+  --primary-foreground: 210 40% 8%;
+  --secondary: 210 30% 18%;
+  --secondary-foreground: 205 25% 92%;
+  --muted: 210 30% 16%;
+  --muted-foreground: 205 15% 62%;
+  --border: 210 25% 22%;
+  --input: 210 25% 22%;
+  --ring: 205 86% 56%;
+  --danger: 0 72% 55%;
+  --danger-foreground: 0 0% 100%;
+  --warning: 38 92% 55%;
+  --warning-foreground: 210 40% 8%;
+  --success: 152 55% 46%;
+  --success-foreground: 210 40% 8%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Larger default tap targets for OR touchscreen mode. */
+.touch-mode button,
+.touch-mode a[role='button'] {
+  min-height: 3rem;
+  min-width: 3rem;
+}

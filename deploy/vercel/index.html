@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BMH — CPB Perfusion Record</title>
+<style>
+  /*
+   * Benjamin Mkapa Hospital — Cardiopulmonary Bypass Perfusion Record.
+   * Single self-contained file: no server, no build, no network. Works offline.
+   * All clinical calculations mirror the tested @perfusio/clinical formulas.
+   */
+  :root{
+    --blue:#12609b; --blue-d:#0d4675; --ink:#12212e; --muted:#5b6b78;
+    --line:#c3d0da; --bg:#eef3f7; --card:#fff; --danger:#c0392b; --ok:#1e8449;
+    --warn:#b9770e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  header.top{background:var(--blue);color:#fff;padding:14px 20px;display:flex;
+    align-items:center;gap:14px}
+  header.top .logo{width:42px;height:42px;border-radius:8px;background:#fff;
+    display:flex;align-items:center;justify-content:center;color:var(--blue);font-weight:800}
+  header.top h1{margin:0;font-size:18px;line-height:1.2}
+  header.top p{margin:2px 0 0;font-size:12px;opacity:.9}
+  .wrap{max-width:1100px;margin:18px auto;padding:0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:16px;margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:15px;color:var(--blue-d);
+    border-bottom:2px solid var(--bg);padding-bottom:6px}
+  .grid{display:grid;gap:10px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g6{grid-template-columns:repeat(6,1fr)}
+  label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.02em}
+  input,select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;
+    font-size:14px;background:#fff;color:var(--ink)}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px #12609b22}
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid var(--line);padding:5px 6px;text-align:center;font-size:13px}
+  th{background:#f2f6f9;color:var(--blue-d);font-weight:700}
+  td input{border:none;border-radius:0;padding:5px;text-align:center}
+  td input:focus{box-shadow:inset 0 0 0 2px var(--blue)}
+  .calc{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .metric{background:#f4f8fb;border:1px solid var(--line);border-radius:8px;padding:10px}
+  .metric .k{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .metric .v{font-size:20px;font-weight:700;margin-top:2px}
+  .metric .u{font-size:12px;font-weight:400;color:var(--muted)}
+  .metric.alert .v{color:var(--danger)}
+  .metric.good .v{color:var(--ok)}
+  .btn{background:var(--blue);color:#fff;border:none;border-radius:7px;padding:9px 16px;
+    font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{background:var(--blue-d)}
+  .btn.sec{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+  .btn.warn{background:#fff;color:var(--danger);border:1px solid var(--danger)}
+  .toolbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 0;
+    display:flex;gap:10px;flex-wrap:wrap}
+  .addrow{margin-top:8px}
+  .note{font-size:11px;color:var(--muted);margin-top:6px}
+  .status{font-size:12px;color:var(--ok);margin-left:auto;align-self:center}
+  /* Decorative hero banner */
+  .hero{position:relative;border-radius:12px;overflow:hidden;margin-bottom:16px;
+    background:linear-gradient(120deg,var(--blue-d),var(--blue));color:#fff;
+    padding:22px 24px;display:flex;align-items:center;gap:20px}
+  .hero .art{flex:0 0 150px;opacity:.95}
+  .hero h2{margin:0 0 6px;font-size:20px;color:#fff;border:none;padding:0}
+  .hero p{margin:0;font-size:13px;opacity:.9;max-width:520px}
+  /* Photo gallery */
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .gallery figure{margin:0;border-radius:10px;overflow:hidden;border:1px solid var(--line);
+    background:#f4f8fb;aspect-ratio:4/3;position:relative}
+  .gallery img{width:100%;height:100%;object-fit:cover;display:block}
+  .gallery figcaption{position:absolute;left:0;right:0;bottom:0;font-size:11px;color:#fff;
+    background:linear-gradient(transparent,#0009);padding:14px 8px 6px}
+  .ph{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;
+    color:var(--muted);gap:6px;text-align:center;padding:8px}
+  .ph small{font-size:10.5px;line-height:1.3}
+  /* Checklist */
+  .checklist{columns:2;column-gap:26px}
+  .chk{break-inside:avoid;display:flex;align-items:flex-start;gap:9px;padding:5px 4px;
+    border-radius:6px;cursor:pointer}
+  .chk:hover{background:#f4f8fb}
+  .chk input{width:18px;height:18px;margin-top:1px;flex:0 0 auto;accent-color:var(--blue)}
+  .chk span{font-size:13.5px;line-height:1.35}
+  .chk.done span{color:var(--muted);text-decoration:line-through}
+  .chkbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .chkbar .track{flex:1;height:10px;background:var(--bg);border-radius:6px;overflow:hidden}
+  .chkbar .fill{height:100%;width:0;background:var(--ok);transition:width .2s}
+  .chkbar .count{font-size:13px;font-weight:700;color:var(--blue-d);min-width:60px;text-align:right}
+  .chkbar .ready{color:var(--ok)}
+  @media (max-width:720px){.gallery{grid-template-columns:repeat(2,1fr)}.checklist{columns:1}.hero{flex-direction:column;text-align:center}}
+  @media (max-width:720px){.g3,.g4,.g6,.calc{grid-template-columns:repeat(2,1fr)}}
+  @media print{
+    body{background:#fff}
+    .toolbar,.addrow,.note{display:none}
+    .card{break-inside:avoid;border-color:#000;box-shadow:none}
+    header.top{background:#fff;color:#000;border-bottom:2px solid #000}
+    header.top .logo{border:1px solid #000}
+    input,select,td input{border:none}
+    .hero{background:#fff;color:#000;border:1px solid #000}
+    .hero h2,.hero p{color:#000}
+    .checklist{columns:2}
+    .gallery figure{border:1px solid #000}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="logo">BMH</div>
+  <div>
+    <h1>Benjamin Mkapa Hospital</h1>
+    <p>Cardiopulmonary Bypass — Perfusion Record</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <button class="btn" onclick="saveLocal()">Save</button>
+    <button class="btn sec" onclick="loadLocal()">Load saved</button>
+    <button class="btn sec" onclick="exportExcel()">Export Excel</button>
+    <button class="btn sec" onclick="exportJSON()">Export JSON</button>
+    <button class="btn sec" onclick="analyseAndScroll()">Analyse</button>
+    <button class="btn sec" onclick="window.print()">Print / PDF</button>
+    <button class="btn warn" onclick="clearAll()">Clear</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <!-- ── Decorative hero ────────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="art" aria-hidden="true">
+      <!-- Stylised CPB circuit: reservoir, oxygenator, roller pump, patient loop -->
+      <svg viewBox="0 0 150 110" width="150" height="110" fill="none">
+        <rect x="10" y="14" width="26" height="40" rx="4" fill="#fff" opacity=".2"/>
+        <rect x="10" y="14" width="26" height="40" rx="4" stroke="#fff" stroke-width="2"/>
+        <path d="M14 46h18l-9 8z" fill="#ffd7d7" opacity=".9"/>
+        <circle cx="70" cy="60" r="18" fill="#fff" opacity=".18"/>
+        <circle cx="70" cy="60" r="18" stroke="#fff" stroke-width="2"/>
+        <circle cx="70" cy="60" r="7" stroke="#fff" stroke-width="2"/>
+        <circle cx="118" cy="30" r="15" stroke="#fff" stroke-width="2"/>
+        <circle cx="118" cy="30" r="4" fill="#fff"/>
+        <path d="M36 30h74M112 44 88 54M52 60H88M88 66l22 14" stroke="#ff9a9a" stroke-width="3" stroke-linecap="round"/>
+        <path d="M118 45v30q0 12-12 12H40" stroke="#fff" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+      </svg>
+    </div>
+    <div>
+      <h2>Benjamin Mkapa Hospital — Perfusion</h2>
+      <p>Cardiopulmonary bypass recording, pre-bypass safety checklist, and live
+         clinical calculations. Complete the checklist before going on pump.</p>
+    </div>
+  </div>
+
+  <!-- ── Photo gallery (photos embed into the record — no upload needed) ─ -->
+  <div class="card">
+    <h2>Theatre &amp; Circuit</h2>
+    <div class="gallery" id="gallery"></div>
+    <input type="file" id="photoInput" accept="image/*" style="display:none" />
+    <p class="note">Tap a tile to add a photo from this device (circuit, team, checklist…).
+      Photos are embedded straight into the record — nothing is uploaded anywhere, and they
+      print with the form. Tap a photo again to replace or remove it.</p>
+  </div>
+
+  <!-- ── Pre-bypass safety checklist ────────────────────────────────── -->
+  <div class="card">
+    <h2>Pre-Bypass Check List</h2>
+    <div class="chkbar">
+      <div class="track"><div class="fill" id="chkFill"></div></div>
+      <div class="count" id="chkCount">0 / 25</div>
+    </div>
+    <div class="checklist" id="checklist"></div>
+    <p class="note">Every item should be confirmed before commencing cardiopulmonary bypass. Progress is saved automatically.</p>
+  </div>
+
+  <!-- ── Patient & case ─────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Patient &amp; Case</h2>
+    <div class="grid g4">
+      <div><label>Perf No</label><input id="perfNo" /></div>
+      <div><label>Date</label><input id="date" type="date" /></div>
+      <div><label>Reg No</label><input id="regNo" /></div>
+      <div><label>Hospital No</label><input id="hospNo" /></div>
+      <div style="grid-column:span 2"><label>Name of patient</label><input id="name" /></div>
+      <div><label>Age</label><input id="age" type="number" min="0" /></div>
+      <div><label>Sex</label>
+        <select id="sex" oninput="recalc()"><option value="MALE">Male</option>
+        <option value="FEMALE">Female</option><option value="UNKNOWN">Unknown</option></select></div>
+      <div><label>Weight (kg)</label><input id="weight" type="number" step="0.1" oninput="recalc()" /></div>
+      <div><label>Height (cm)</label><input id="height" type="number" step="0.1" oninput="recalc()" /></div>
+      <div><label>Blood group</label>
+        <select id="blood"><option>O+</option><option>O-</option><option>A+</option>
+        <option>A-</option><option>B+</option><option>B-</option><option>AB+</option>
+        <option>AB-</option><option>Unknown</option></select></div>
+      <div><label>Pre-op Hct (%)</label><input id="hctPre" type="number" step="0.1" value="40" oninput="recalc()" /></div>
+      <div style="grid-column:span 2"><label>Diagnosis</label><input id="diagnosis" /></div>
+      <div style="grid-column:span 2"><label>Procedure</label><input id="procedure" /></div>
+      <div style="grid-column:span 2"><label>Allergy</label><input id="allergy" /></div>
+      <div><label>Surgeon</label><input id="surgeon" /></div>
+      <div><label>Anaesthesiologist</label><input id="anaes" /></div>
+      <div><label>Perfusionist</label><input id="perfusionist" /></div>
+      <div><label>Assistant perfusionist</label><input id="assistant" /></div>
+      <div><label>Type of oxygenator</label><input id="oxyType" /></div>
+      <div><label>Oxygenator S/N</label><input id="oxySn" /></div>
+      <div><label>Induction time</label><input id="inductionTime" type="time" /></div>
+      <div><label>Cutting time</label><input id="cuttingTime" type="time" /></div>
+      <div><label>Heparine time</label><input id="heparinTime" type="time" /></div>
+    </div>
+  </div>
+
+  <!-- ── Automatic calculations ─────────────────────────────────────── -->
+  <div class="card">
+    <h2>Automatic Calculations</h2>
+    <div class="calc" id="calc">
+      <div class="metric"><div class="k">Surface area (BSA)</div><div class="v"><span id="mBsa">—</span> <span class="u">m²</span></div></div>
+      <div class="metric"><div class="k">BMI</div><div class="v"><span id="mBmi">—</span> <span class="u">kg/m²</span></div></div>
+      <div class="metric"><div class="k">Patient blood volume</div><div class="v"><span id="mEbv">—</span> <span class="u">mL</span></div></div>
+      <div class="metric"><div class="k">Target blood flow</div><div class="v"><span id="mFlow">—</span> <span class="u">L/min</span></div></div>
+      <div class="metric"><div class="k">Estimated prime</div><div class="v"><span id="mPrime">—</span> <span class="u">mL</span></div></div>
+      <div class="metric"><div class="k">Heparin load (300 IU/kg)</div><div class="v"><span id="mHep">—</span> <span class="u">IU</span></div></div>
+      <div class="metric"><div class="k">Predicted Hct on bypass</div><div class="v"><span id="mHct">—</span> <span class="u">%</span></div></div>
+      <div class="metric"><div class="k">Predicted Hb on bypass</div><div class="v"><span id="mHb">—</span> <span class="u">g/dL</span></div></div>
+      <div class="metric"><div class="k">Protamine (1mg/100IU)</div><div class="v"><span id="mProt">—</span> <span class="u">mg</span></div></div>
+    </div>
+    <p class="note">Du Bois BSA · Nadler blood volume · cardiac index by weight band · 3:1 Hb rule. Guidance only — protocol and ACT govern actual dosing.</p>
+  </div>
+
+  <!-- ── ON / OFF / TOTAL + SITE/SAT/PRESS ──────────────────────────── -->
+  <div class="grid g2">
+    <div class="card">
+      <h2>Times (ON / OFF / TOTAL)</h2>
+      <table>
+        <thead><tr><th></th><th>ON</th><th>OFF</th><th>Total (min)</th></tr></thead>
+        <tbody id="intervals"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Site · SAT · Pressure</h2>
+      <table>
+        <thead><tr><th>Site</th><th>SAT (%)</th><th>Press (mmHg)</th></tr></thead>
+        <tbody id="sites"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── ACT ────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>A.C.T (seconds)</h2>
+    <table>
+      <thead><tr><th>Baseline</th><th>Post heparin</th><th>On pump</th><th>Post protamin</th></tr></thead>
+      <tbody><tr>
+        <td><input id="actBaseline" type="number" /></td>
+        <td><input id="actHeparin" type="number" /></td>
+        <td><input id="actPump" type="number" /></td>
+        <td><input id="actProtamin" type="number" /></td>
+      </tr></tbody>
+    </table>
+  </div>
+
+  <!-- ── Intraop monitoring time series ─────────────────────────────── -->
+  <div class="card">
+    <h2>Intraoperative Monitoring</h2>
+    <div style="overflow-x:auto">
+      <table id="monitorTable">
+        <thead><tr>
+          <th>Time</th><th>MAP</th><th>Flow<br>L/min</th><th>Gas<br>L/min</th><th>FiO₂</th>
+          <th>NS °C</th><th>Oxy °C</th><th>ACT</th><th>pH</th><th>pCO₂</th><th>pO₂</th>
+          <th>K⁺</th><th>Hct</th><th>Hb</th><th>Lac</th><th>SaO₂</th><th>DO₂i</th>
+        </tr></thead>
+        <tbody id="monitorRows"></tbody>
+      </table>
+    </div>
+    <button class="btn sec addrow" onclick="addMonitorRow()">+ Add reading</button>
+    <p class="note">DO₂i is computed live from Hb, SaO₂, flow and BSA. It turns red below 270 mL/min/m² (goal-directed perfusion threshold).</p>
+  </div>
+
+  <!-- ── Cardioplegia / Urine / Drugs ───────────────────────────────── -->
+  <div class="grid g3">
+    <div class="card">
+      <h2>Cardioplegia (4:1)</h2>
+      <table><thead><tr><th>Time</th><th>Quantity (mL)</th></tr></thead><tbody id="cplegia"></tbody></table>
+      <button class="btn sec addrow" onclick="addPairRow('cplegia')">+ Add</button>
+    </div>
+    <div class="card">
+      <h2>Urine</h2>
+      <table><thead><tr><th>Time</th><th>Volume (mL)</th></tr></thead><tbody id="urine"></tbody></table>
+      <button class="btn sec addrow" onclick="addPairRow('urine')">+ Add</button>
+    </div>
+    <div class="card">
+      <h2>Drugs (pre &amp; during pump)</h2>
+      <table><thead><tr><th>Drug</th><th>Qty</th><th>Time</th></tr></thead><tbody id="drugs"></tbody></table>
+      <button class="btn sec addrow" onclick="addDrugRow()">+ Add</button>
+    </div>
+  </div>
+
+  <!-- ── Fluid balance ──────────────────────────────────────────────── -->
+  <div class="grid g2">
+    <div class="card">
+      <h2>Fluid Balance — Intake</h2>
+      <table>
+        <thead><tr><th>Item</th><th>Volume (mL)</th></tr></thead>
+        <tbody id="intake"></tbody>
+        <tfoot><tr><th>Total</th><th id="intakeTotal">0</th></tr></tfoot>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Fluid Balance — Output</h2>
+      <table>
+        <thead><tr><th>Item</th><th>Volume (mL)</th></tr></thead>
+        <tbody id="output"></tbody>
+        <tfoot>
+          <tr><th>Total</th><th id="outputTotal">0</th></tr>
+          <tr><th>Net balance</th><th id="netBalance">0</th></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Blood products ─────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Blood Products</h2>
+    <table><thead><tr><th>Product</th><th>Unit No</th><th>Volume (mL)</th><th>Time</th></tr></thead>
+      <tbody id="bloodProducts"></tbody></table>
+    <button class="btn sec addrow" onclick="addBloodRow()">+ Add</button>
+  </div>
+
+  <!-- ── Devices & recommendation ───────────────────────────────────── -->
+  <div class="card">
+    <h2>Devices &amp; Recommendation</h2>
+    <p class="note" style="margin-top:0">Support the patient was placed on coming off bypass, and post-op recommendations.</p>
+    <div class="checklist" id="devices"></div>
+    <table style="margin-top:12px">
+      <thead><tr><th>Device / Recommendation</th><th>Unit No / Setting</th><th>Time</th></tr></thead>
+      <tbody id="deviceRows"></tbody>
+    </table>
+    <button class="btn sec addrow" onclick="addDeviceRow()">+ Add device / recommendation</button>
+  </div>
+
+  <!-- ── Complications ──────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Complications</h2>
+    <div class="chkbar">
+      <label class="chk" style="margin:0"><input type="checkbox" id="complNone" onchange="toggleNoCompl()"><span><strong>No complications</strong> — uneventful bypass</span></label>
+    </div>
+    <div class="checklist" id="complications"></div>
+    <div style="margin-top:12px">
+      <label>Details / narrative</label>
+      <textarea id="complNotes" rows="3" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit;resize:vertical"></textarea>
+    </div>
+  </div>
+
+  <!-- ── Analysis & summary ─────────────────────────────────────────── -->
+  <div class="card" id="analysisCard">
+    <h2>Analysis &amp; Summary</h2>
+    <div class="calc" id="analysis">
+      <div class="metric"><div class="k">Analysis</div><div class="v" style="font-size:15px">Press <em>Analyse</em></div></div>
+    </div>
+    <p class="note">Computed from the monitoring readings and fluid balance. Refreshes each time you press Analyse or Export Excel.</p>
+  </div>
+
+  <!-- ── Email ──────────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Send by Email</h2>
+    <div class="grid g3" style="align-items:end">
+      <div style="grid-column:span 2"><label>Recipient email</label><input id="emailTo" type="email" placeholder="records@bmh.go.tz" /></div>
+      <div><button class="btn" style="width:100%" onclick="emailSummary()">Compose email</button></div>
+    </div>
+    <p class="note">Opens your email app with the case summary already written in the message.
+      Because browsers can’t attach files automatically, the Excel file is downloaded at the
+      same time — just attach it to the email before sending.</p>
+  </div>
+
+  <p class="note" style="text-align:center;padding-bottom:24px">
+    Benjamin Mkapa Hospital · Perfusio standalone record · saves to this browser only ·
+    export Excel / JSON for the record system.
+  </p>
+</div>
+
+<script>
+"use strict";
+/* ── Clinical formulas (mirror @perfusio/clinical) ─────────────────── */
+function num(v){ const n = parseFloat(v); return isFinite(n) ? n : null; }
+function bsaDuBois(w,h){ return 0.007184 * Math.pow(w,0.425) * Math.pow(h,0.725); }
+function bmi(w,h){ const m=h/100; return w/(m*m); }
+function bloodVolume(w,h,sex){
+  const hM=h/100;
+  if(sex==='MALE')   return (0.3669*Math.pow(hM,3)+0.03219*w+0.6041)*1000;
+  if(sex==='FEMALE') return (0.3561*Math.pow(hM,3)+0.03308*w+0.1833)*1000;
+  return w*70;
+}
+function recommendedCI(w){
+  if(w<5)  return 3.0;
+  if(w<15) return 2.8;
+  if(w<30) return 2.6;
+  return 2.4;
+}
+function estPrime(w){
+  if(w<5)  return 250;
+  if(w<15) return 600;
+  if(w<30) return 1000;
+  return 1500;
+}
+function predictedHct(ebv,hctPre,prime){ return (ebv*hctPre)/(ebv+prime); }
+function computeDo2i(hb,sao2frac,pao2,flow,bsa){
+  const caO2 = 1.34*hb*sao2frac + 0.003*pao2;
+  const do2 = caO2*flow*10;
+  return do2/bsa;
+}
+const DO2I_CRIT = 270;
+
+/* ── Live header calculations ──────────────────────────────────────── */
+function recalc(){
+  const w=num(v('weight')), h=num(v('height')), sex=v('sex'), hctPre=num(v('hctPre'))||40;
+  const set=(id,val)=>{ document.getElementById(id).textContent = val; };
+  if(!w||!h||w<=0||h<=0){
+    ['mBsa','mBmi','mEbv','mFlow','mPrime','mHep','mHct','mHb','mProt'].forEach(id=>set(id,'—'));
+    recalcMonitor(); return;
+  }
+  const bsa=bsaDuBois(w,h), ebv=bloodVolume(w,h,sex), prime=estPrime(w);
+  const flow=recommendedCI(w)*bsa, hep=w*300;
+  const hct=predictedHct(ebv,hctPre,prime), hb=hct/3;
+  set('mBsa', bsa.toFixed(2));
+  set('mBmi', bmi(w,h).toFixed(1));
+  set('mEbv', Math.round(ebv));
+  set('mFlow', flow.toFixed(2));
+  set('mPrime', prime);
+  set('mHep', Math.round(hep));
+  set('mHct', hct.toFixed(1));
+  set('mHb', hb.toFixed(1));
+  set('mProt', Math.round(hep/100));
+  recalcMonitor();
+  saveLocal(true);
+}
+function currentBSA(){
+  const w=num(v('weight')), h=num(v('height'));
+  return (w&&h&&w>0&&h>0) ? bsaDuBois(w,h) : null;
+}
+
+/* ── Small DOM helpers ─────────────────────────────────────────────── */
+function v(id){ const el=document.getElementById(id); return el?el.value:''; }
+function el(tag,attrs){ const e=document.createElement(tag); if(attrs) for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function cell(child){ const td=el('td'); if(typeof child==='string') td.textContent=child; else td.appendChild(child); return td; }
+function inp(type){ const i=el('input',{type:type||'text'}); return i; }
+
+/* ── ON/OFF/TOTAL intervals ────────────────────────────────────────── */
+const INTERVALS=['C.P.B','Crossclamp','Hot blood','T.C.A'];
+function buildIntervals(){
+  const tb=document.getElementById('intervals');
+  INTERVALS.forEach((name,idx)=>{
+    const tr=el('tr');
+    tr.appendChild(cell(name));
+    const on=inp('time'), off=inp('time'), tot=inp('text');
+    on.id='int_on_'+idx; off.id='int_off_'+idx; tot.id='int_tot_'+idx;
+    tot.readOnly=true;
+    const upd=()=>{ tot.value = diffMin(on.value,off.value); saveLocal(true); };
+    on.addEventListener('input',upd); off.addEventListener('input',upd);
+    tr.appendChild(cell(on)); tr.appendChild(cell(off)); tr.appendChild(cell(tot));
+    tb.appendChild(tr);
+  });
+}
+function diffMin(a,b){
+  if(!a||!b) return '';
+  const pa=a.split(':'), pb=b.split(':');
+  if(pa.length<2||pb.length<2) return '';
+  let m=(parseInt(pb[0])*60+parseInt(pb[1]))-(parseInt(pa[0])*60+parseInt(pa[1]));
+  if(m<0) m+=24*60; // crosses midnight
+  return isFinite(m)? String(m) : '';
+}
+
+/* ── Site / SAT / Pressure ─────────────────────────────────────────── */
+const SITES=['SVC','IVC','RA','Main PA','Left PA','Right PA','LA','LV','AO','FiO₂'];
+function buildSites(){
+  const tb=document.getElementById('sites');
+  SITES.forEach((name,idx)=>{
+    const tr=el('tr');
+    tr.appendChild(cell(name));
+    const sat=inp('number'), pr=inp('number');
+    sat.id='site_sat_'+idx; pr.id='site_pr_'+idx;
+    sat.addEventListener('input',()=>saveLocal(true)); pr.addEventListener('input',()=>saveLocal(true));
+    tr.appendChild(cell(sat)); tr.appendChild(cell(pr));
+    tb.appendChild(tr);
+  });
+}
+
+/* ── Pre-bypass checklist ──────────────────────────────────────────── */
+const CHECKLIST=[
+  'Oxygenator holder in right place and secured',
+  'Pump circuit tubing secured without kinks',
+  'Luer connections tight',
+  'Gas lines connected',
+  'Gas lines not leaking and unobstructed all the way to source',
+  'Gas supply and blender working',
+  'Gas exhaust cap removed',
+  'Power cords secured on both ends',
+  'Back up power available',
+  'Hand cranks available',
+  'Water heater cooler operable and warming',
+  'Oxygenator checked for leaks (before priming)',
+  'Occlusion set on roller pumps',
+  'Cardioplegia system set and primed at proper temperature',
+  'Drugs added to cardioplegia (if necessary)',
+  'Suckers and vent in proper direction in pump housing',
+  'Vent valve in proper direction',
+  'Pressure transducers calibrated',
+  'Stop cock closed properly',
+  'Drugs (heparin) added to prime as required',
+  'Level sensor attached and operable',
+  'Bubble detector placed and operable',
+  'Pressure warning — turn off devices set and operable',
+  'Temperature probes connected',
+  'Drugs diluted'
+];
+function buildChecklist(){
+  const box=document.getElementById('checklist');
+  CHECKLIST.forEach((text,i)=>{
+    const lab=el('label',{class:'chk'});
+    const cb=el('input',{type:'checkbox'}); cb.id='chk_'+i;
+    const sp=el('span'); sp.textContent=text;
+    cb.addEventListener('change',()=>{ lab.classList.toggle('done',cb.checked); checklistProgress(); saveLocal(true); });
+    lab.appendChild(cb); lab.appendChild(sp); box.appendChild(lab);
+  });
+}
+function checklistProgress(){
+  let done=0;
+  CHECKLIST.forEach((_,i)=>{ const cb=document.getElementById('chk_'+i); if(cb&&cb.checked) done++; });
+  const pct=Math.round(done/CHECKLIST.length*100);
+  document.getElementById('chkFill').style.width=pct+'%';
+  const c=document.getElementById('chkCount');
+  const ready=done===CHECKLIST.length;
+  c.textContent = ready ? 'READY ✓' : done+' / '+CHECKLIST.length;
+  c.classList.toggle('ready',ready);
+}
+
+/* ── Devices & recommendation ──────────────────────────────────────── */
+const DEVICES=[
+  'Intra-aortic balloon pump (IABP)','ECMO','Temporary epicardial pacing wires',
+  'Inotropic support','Vasopressor support','Inhaled nitric oxide',
+  'LVAD / RVAD','Cell saver used','Modified ultrafiltration (MUF)',
+  'Left atrial / PA line','Delayed sternal closure','Nitric / iNO weaning plan'
+];
+function buildDevices(){
+  const box=document.getElementById('devices');
+  DEVICES.forEach((text,i)=>{
+    const lab=el('label',{class:'chk'});
+    const cb=el('input',{type:'checkbox'}); cb.id='dev_'+i;
+    const sp=el('span'); sp.textContent=text;
+    cb.addEventListener('change',()=>{ lab.classList.toggle('done',cb.checked); saveLocal(true); });
+    lab.appendChild(cb); lab.appendChild(sp); box.appendChild(lab);
+  });
+}
+function addDeviceRow(d,u,t){
+  const tb=document.getElementById('deviceRows');
+  const tr=el('tr');
+  const dev=inp('text'), unit=inp('text'), time=inp('time');
+  if(d!=null)dev.value=d; if(u!=null)unit.value=u; if(t!=null)time.value=t;
+  [dev,unit,time].forEach(x=>x.addEventListener('input',()=>saveLocal(true)));
+  [dev,unit,time].forEach(x=>tr.appendChild(cell(x)));
+  tb.appendChild(tr);
+}
+
+/* ── Complications ─────────────────────────────────────────────────── */
+const COMPLICATIONS=[
+  'Difficult weaning from bypass','Low cardiac output','Arrhythmia',
+  'Excessive bleeding / coagulopathy','Aortic dissection','Air embolism',
+  'Protamine reaction','Haemolysis','Oxygenator / circuit failure',
+  'Clot in circuit','Hyperkalaemia','Renal impairment / low urine output',
+  'Neurological event','Malignant hyperthermia','Cannulation problem'
+];
+function buildComplications(){
+  const box=document.getElementById('complications');
+  COMPLICATIONS.forEach((text,i)=>{
+    const lab=el('label',{class:'chk'});
+    const cb=el('input',{type:'checkbox'}); cb.id='comp_'+i;
+    const sp=el('span'); sp.textContent=text;
+    cb.addEventListener('change',()=>{
+      lab.classList.toggle('done',cb.checked);
+      if(cb.checked){ const none=document.getElementById('complNone'); if(none) none.checked=false; }
+      saveLocal(true);
+    });
+    lab.appendChild(cb); lab.appendChild(sp); box.appendChild(lab);
+  });
+}
+function toggleNoCompl(){
+  const none=document.getElementById('complNone');
+  if(none && none.checked){
+    COMPLICATIONS.forEach((_,i)=>{ const cb=document.getElementById('comp_'+i);
+      if(cb){ cb.checked=false; const lab=cb.closest('.chk'); if(lab) lab.classList.remove('done'); } });
+  }
+  saveLocal(true);
+}
+
+/* ── Photo gallery — photos embedded as data URLs, no network ───────── */
+const PHOTO_SLOTS=['Circuit','Perfusion team','Checklist','Theatre'];
+let photos={};            // slotIndex -> dataURL
+let activeSlot=null;
+function buildGallery(){
+  const g=document.getElementById('gallery');
+  g.innerHTML='';
+  PHOTO_SLOTS.forEach((label,i)=>{
+    const fig=el('figure'); fig.style.cursor='pointer'; fig.title='Tap to add or change photo';
+    fig.onclick=()=>choosePhoto(i);
+    if(photos[i]){
+      const img=el('img'); img.src=photos[i]; img.alt=label;
+      const cap=el('figcaption'); cap.textContent=label;
+      fig.appendChild(img); fig.appendChild(cap);
+    } else {
+      const ph=el('div',{class:'ph'});
+      ph.innerHTML='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#8aa0b0" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.8"/><path d="M4 17l5-5 4 4 3-3 4 4"/></svg>'
+        +'<small>'+label+'<br>+ add photo</small>';
+      fig.appendChild(ph);
+    }
+    g.appendChild(fig);
+  });
+}
+function choosePhoto(i){
+  if(photos[i] && !confirm('Replace or remove this photo? (Cancel keeps it)')){ return; }
+  activeSlot=i;
+  document.getElementById('photoInput').click();
+}
+function onPhotoPicked(e){
+  const file=e.target.files && e.target.files[0];
+  e.target.value='';                       // allow re-picking same file
+  if(activeSlot===null) return;
+  if(!file){                               // cancelled → offer removal
+    delete photos[activeSlot]; buildGallery(); saveLocal(true); return;
+  }
+  const reader=new FileReader();
+  reader.onload=()=>{ downscale(reader.result, 1000, dataUrl=>{
+    photos[activeSlot]=dataUrl; buildGallery(); saveLocal(true); flash('Photo added');
+  }); };
+  reader.onerror=()=>flash('Could not read image');
+  reader.readAsDataURL(file);
+}
+/* Downscale large phone photos so localStorage stays within quota. */
+function downscale(dataUrl,maxW,cb){
+  const img=new Image();
+  img.onload=()=>{
+    let{width:w,height:h}=img;
+    if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);
+    try{ cb(c.toDataURL('image/jpeg',0.8)); }catch(_){ cb(dataUrl); }
+  };
+  img.onerror=()=>cb(dataUrl);
+  img.src=dataUrl;
+}
+
+/* ── Monitoring time-series ────────────────────────────────────────── */
+const MON_COLS=['time','map','flow','gas','fio2','nstemp','oxytemp','act','ph','pco2','po2','k','hct','hb','lac','sao2'];
+function addMonitorRow(data){
+  const tb=document.getElementById('monitorRows');
+  const tr=el('tr');
+  MON_COLS.forEach(c=>{
+    const i=inp(c==='time'?'time':'number');
+    i.dataset.col=c;
+    if(data&&data[c]!=null) i.value=data[c];
+    i.addEventListener('input',()=>{ recalcMonitor(); saveLocal(true); });
+    tr.appendChild(cell(i));
+  });
+  const do2=el('td'); do2.className='do2i'; do2.textContent='—';
+  tr.appendChild(do2);
+  tb.appendChild(tr);
+  recalcMonitor();
+}
+function recalcMonitor(){
+  const bsa=currentBSA();
+  document.querySelectorAll('#monitorRows tr').forEach(tr=>{
+    const get=c=>{ const f=tr.querySelector('[data-col="'+c+'"]'); return f?num(f.value):null; };
+    const hb=get('hb'), sao2=get('sao2'), flow=get('flow'), po2=get('po2');
+    const cellDo2=tr.querySelector('.do2i');
+    if(bsa&&hb!=null&&sao2!=null&&flow!=null){
+      const d=computeDo2i(hb,sao2/100,po2!=null?po2:150,flow,bsa);
+      cellDo2.textContent=Math.round(d);
+      cellDo2.style.color = d<DO2I_CRIT ? 'var(--danger)' : 'var(--ok)';
+      cellDo2.style.fontWeight='700';
+    } else { cellDo2.textContent='—'; cellDo2.style.color=''; }
+  });
+}
+
+/* ── Generic small tables ──────────────────────────────────────────── */
+function addPairRow(id,a,b){
+  const tb=document.getElementById(id);
+  const tr=el('tr');
+  const t=inp('time'), q=inp('number');
+  if(a!=null)t.value=a; if(b!=null)q.value=b;
+  [t,q].forEach(x=>x.addEventListener('input',()=>saveLocal(true)));
+  tr.appendChild(cell(t)); tr.appendChild(cell(q));
+  tb.appendChild(tr);
+}
+function addDrugRow(d,q,t){
+  const tb=document.getElementById('drugs');
+  const tr=el('tr');
+  const drug=inp('text'), qty=inp('text'), time=inp('time');
+  if(d!=null)drug.value=d; if(q!=null)qty.value=q; if(t!=null)time.value=t;
+  [drug,qty,time].forEach(x=>x.addEventListener('input',()=>saveLocal(true)));
+  tr.appendChild(cell(drug)); tr.appendChild(cell(qty)); tr.appendChild(cell(time));
+  tb.appendChild(tr);
+}
+function addBloodRow(p,u,vol,t){
+  const tb=document.getElementById('bloodProducts');
+  const tr=el('tr');
+  const prod=inp('text'), unit=inp('text'), volume=inp('number'), time=inp('time');
+  if(p!=null)prod.value=p; if(u!=null)unit.value=u; if(vol!=null)volume.value=vol; if(t!=null)time.value=t;
+  [prod,unit,volume,time].forEach(x=>x.addEventListener('input',()=>saveLocal(true)));
+  [prod,unit,volume,time].forEach(x=>tr.appendChild(cell(x)));
+  tb.appendChild(tr);
+}
+
+/* ── Fluid balance ─────────────────────────────────────────────────── */
+const INTAKE=['Prime solution','Blood','Sodium chloride','Plasmalyte','Mannitol','Other'];
+const OUTPUT=['Fast','Urine','Ultrafiltration','Hemofiltration','Other'];
+function buildFluids(){
+  const it=document.getElementById('intake'), ot=document.getElementById('output');
+  INTAKE.forEach((n,i)=>{
+    const tr=el('tr'); tr.appendChild(cell(n));
+    const q=inp('number'); q.id='in_'+i; q.addEventListener('input',fluidTotals);
+    tr.appendChild(cell(q)); it.appendChild(tr);
+  });
+  OUTPUT.forEach((n,i)=>{
+    const tr=el('tr'); tr.appendChild(cell(n));
+    const q=inp('number'); q.id='out_'+i; q.addEventListener('input',fluidTotals);
+    tr.appendChild(cell(q)); ot.appendChild(tr);
+  });
+}
+function fluidTotals(){
+  let inT=0,outT=0;
+  INTAKE.forEach((_,i)=>{ inT+=num(v('in_'+i))||0; });
+  OUTPUT.forEach((_,i)=>{ outT+=num(v('out_'+i))||0; });
+  document.getElementById('intakeTotal').textContent=inT;
+  document.getElementById('outputTotal').textContent=outT;
+  const net=inT-outT;
+  const nb=document.getElementById('netBalance');
+  nb.textContent=(net>0?'+':'')+net;
+  nb.style.color = net>0 ? 'var(--warn)' : 'var(--ok)';
+  saveLocal(true);
+}
+
+/* ── Persistence (localStorage) ────────────────────────────────────── */
+const KEY='bmh-perfusion-record-v1';
+function collect(){
+  const data={fields:{},checklist:{},photos:photos,monitor:[],cplegia:[],urine:[],drugs:[],blood:[],
+    devices:[],intervals:[],sites:[],intake:[],output:[]};
+  document.querySelectorAll('input[id],select[id],textarea[id]').forEach(f=>{
+    if(f.type==='checkbox'){ data.checklist[f.id]=f.checked; }
+    else { data.fields[f.id]=f.value; }
+  });
+  document.querySelectorAll('#monitorRows tr').forEach(tr=>{
+    const row={}; tr.querySelectorAll('input').forEach(i=>row[i.dataset.col]=i.value); data.monitor.push(row);
+  });
+  const pairs=id=>{ const a=[]; document.querySelectorAll('#'+id+' tr').forEach(tr=>{
+    const ins=tr.querySelectorAll('input'); a.push([...ins].map(x=>x.value)); }); return a; };
+  data.cplegia=pairs('cplegia'); data.urine=pairs('urine');
+  data.drugs=pairs('drugs'); data.blood=pairs('bloodProducts');
+  data.devices=pairs('deviceRows');
+  return data;
+}
+let saveTimer=null;
+function saveLocal(quiet){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{ localStorage.setItem(KEY,JSON.stringify(collect()));
+      if(!quiet) flash('Saved to this browser'); else flash('Auto-saved');
+    }catch(e){ flash('Save failed: '+e.message); }
+  },250);
+}
+function loadLocal(){
+  const raw=localStorage.getItem(KEY);
+  if(!raw){ flash('No saved record found'); return; }
+  try{
+    const data=JSON.parse(raw);
+    for(const id in data.fields){ const f=document.getElementById(id); if(f) f.value=data.fields[id]; }
+    if(data.checklist){ for(const id in data.checklist){
+      const cb=document.getElementById(id);
+      if(cb){ cb.checked=!!data.checklist[id]; const lab=cb.closest('.chk'); if(lab) lab.classList.toggle('done',cb.checked); }
+    } }
+    checklistProgress();
+    photos = data.photos || {}; buildGallery();
+    // rebuild dynamic rows
+    document.getElementById('monitorRows').innerHTML='';
+    (data.monitor||[]).forEach(r=>addMonitorRow(r));
+    rebuildPairs('cplegia',data.cplegia); rebuildPairs('urine',data.urine);
+    document.getElementById('drugs').innerHTML=''; (data.drugs||[]).forEach(r=>addDrugRow(r[0],r[1],r[2]));
+    document.getElementById('bloodProducts').innerHTML=''; (data.blood||[]).forEach(r=>addBloodRow(r[0],r[1],r[2],r[3]));
+    document.getElementById('deviceRows').innerHTML=''; (data.devices||[]).forEach(r=>addDeviceRow(r[0],r[1],r[2]));
+    recalc(); fluidTotals(); recalcMonitor();
+    // restore interval totals
+    INTERVALS.forEach((_,i)=>{ const on=v('int_on_'+i),off=v('int_off_'+i);
+      const t=document.getElementById('int_tot_'+i); if(t) t.value=diffMin(on,off); });
+    flash('Loaded saved record');
+  }catch(e){ flash('Load failed: '+e.message); }
+}
+function rebuildPairs(id,rows){
+  document.getElementById(id).innerHTML='';
+  (rows||[]).forEach(r=>addPairRow(id,r[0],r[1]));
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(collect(),null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const name=(v('name')||'record').replace(/[^a-z0-9]+/gi,'_');
+  a.href=url; a.download='bmh-perfusion-'+name+'.json'; a.click();
+  URL.revokeObjectURL(url); flash('Exported JSON');
+}
+/* ── Analysis ──────────────────────────────────────────────────────── */
+function txt(id){ const e=document.getElementById(id); return e?e.textContent:''; }
+function seriesOf(monitor,col){ return monitor.map(r=>num(r[col])).filter(x=>x!=null); }
+function stat(a){ if(!a.length) return null;
+  const s=a.reduce((x,y)=>x+y,0); return {n:a.length,min:Math.min(...a),max:Math.max(...a),mean:s/a.length}; }
+function fmt(x,d){ return x==null?'—':(Math.round(x*Math.pow(10,d||0))/Math.pow(10,d||0)); }
+function analyse(){
+  const d=collect(), m=d.monitor, bsa=currentBSA();
+  const do2=[];
+  m.forEach(r=>{ const hb=num(r.hb),s=num(r.sao2),f=num(r.flow),po=num(r.po2);
+    if(bsa&&hb!=null&&s!=null&&f!=null) do2.push(computeDo2i(hb,s/100,po!=null?po:150,f,bsa)); });
+  let inT=0,outT=0;
+  INTAKE.forEach((_,i)=>inT+=num(v('in_'+i))||0);
+  OUTPUT.forEach((_,i)=>outT+=num(v('out_'+i))||0);
+  let chkDone=0; CHECKLIST.forEach((_,i)=>{const cb=document.getElementById('chk_'+i);if(cb&&cb.checked)chkDone++;});
+  const compl=COMPLICATIONS.filter((_,i)=>{const cb=document.getElementById('comp_'+i);return cb&&cb.checked;});
+  const devs=DEVICES.filter((_,i)=>{const cb=document.getElementById('dev_'+i);return cb&&cb.checked;});
+  return {
+    readings:m.length,
+    flow:stat(seriesOf(m,'flow')), map:stat(seriesOf(m,'map')), temp:stat(seriesOf(m,'nstemp')),
+    act:stat(seriesOf(m,'act')), hct:stat(seriesOf(m,'hct')), lac:stat(seriesOf(m,'lac')),
+    do2:stat(do2),
+    cpb:v('int_tot_0'), clamp:v('int_tot_1'),
+    intake:inT, output:outT, net:inT-outT,
+    checklist:chkDone+' / '+CHECKLIST.length,
+    devices:devs, complications:compl,
+    complNone:(document.getElementById('complNone')||{}).checked
+  };
+}
+function tile(k,val,unit,tone){
+  return '<div class="metric'+(tone?' '+tone:'')+'"><div class="k">'+k+'</div>'
+    +'<div class="v">'+val+(unit?' <span class="u">'+unit+'</span>':'')+'</div></div>';
+}
+function renderAnalysis(){
+  const a=analyse();
+  const rng=s=>s?fmt(s.min,1)+'–'+fmt(s.max,1):'—';
+  const box=document.getElementById('analysis');
+  const lowDo2 = a.do2 && a.do2.min<DO2I_CRIT;
+  box.innerHTML=
+    tile('Monitoring readings', a.readings, '')
+   +tile('Flow (mean)', a.flow?fmt(a.flow.mean,2):'—', 'L/min')
+   +tile('MAP (mean)', a.map?fmt(a.map.mean,0):'—', 'mmHg')
+   +tile('NS temp range', rng(a.temp), '°C')
+   +tile('ACT range', rng(a.act), 's')
+   +tile('Hct range', rng(a.hct), '%')
+   +tile('Lactate (max)', a.lac?fmt(a.lac.max,1):'—', 'mmol/L')
+   +tile('DO₂i (lowest)', a.do2?fmt(a.do2.min,0):'—', 'mL/min/m²', lowDo2?'alert':'good')
+   +tile('CPB time', a.cpb||'—', 'min')
+   +tile('Cross-clamp', a.clamp||'—', 'min')
+   +tile('Fluid net', (a.net>0?'+':'')+a.net, 'mL')
+   +tile('Checklist', a.checklist, '')
+   +tile('Complications', a.complNone?'None':(a.complications.length||'0'), '', a.complications.length?'alert':'good');
+  return a;
+}
+function analyseAndScroll(){
+  renderAnalysis();
+  document.getElementById('analysisCard').scrollIntoView({behavior:'smooth',block:'start'});
+  flash('Analysis updated');
+}
+
+/* ── Excel (CSV) export ────────────────────────────────────────────── */
+function escCsv(x){ x=(x==null?'':String(x)); return /[",\n\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; }
+function buildCSV(){
+  const d=collect(), a=analyse(), F=d.fields, L=[];
+  const row=(...c)=>L.push(c.map(escCsv).join(','));
+  row('Benjamin Mkapa Hospital — CPB Perfusion Record');
+  row('Exported', new Date().toLocaleString());
+  row('');
+  row('PATIENT & CASE');
+  [['Perf No','perfNo'],['Date','date'],['Reg No','regNo'],['Hospital No','hospNo'],['Name','name'],
+   ['Age','age'],['Sex','sex'],['Weight (kg)','weight'],['Height (cm)','height'],['Blood group','blood'],
+   ['Diagnosis','diagnosis'],['Procedure','procedure'],['Surgeon','surgeon'],['Anaesthesiologist','anaes'],
+   ['Perfusionist','perfusionist'],['Assistant','assistant'],['Oxygenator','oxyType'],['Oxy S/N','oxySn'],
+   ['Induction time','inductionTime'],['Cutting time','cuttingTime'],['Heparine time','heparinTime']
+  ].forEach(([lbl,id])=>row(lbl, F[id]||''));
+  row('');
+  row('CALCULATIONS');
+  [['BSA (m²)','mBsa'],['BMI','mBmi'],['Blood volume (mL)','mEbv'],['Target flow (L/min)','mFlow'],
+   ['Prime (mL)','mPrime'],['Heparin (IU)','mHep'],['Predicted Hct (%)','mHct'],
+   ['Predicted Hb (g/dL)','mHb'],['Protamine (mg)','mProt']].forEach(([lbl,id])=>row(lbl, txt(id)));
+  row('');
+  row('TIMES (ON / OFF / TOTAL min)');
+  row('Phase','On','Off','Total (min)');
+  INTERVALS.forEach((n,i)=>row(n, F['int_on_'+i]||'', F['int_off_'+i]||'', F['int_tot_'+i]||''));
+  row('');
+  row('SITE / SAT / PRESS');
+  row('Site','SAT (%)','Press (mmHg)');
+  SITES.forEach((n,i)=>row(n, F['site_sat_'+i]||'', F['site_pr_'+i]||''));
+  row('');
+  row('A.C.T (seconds)');
+  row('Baseline','Post heparin','On pump','Post protamin');
+  row(F['actBaseline']||'', F['actHeparin']||'', F['actPump']||'', F['actProtamin']||'');
+  row('');
+  row('MONITORING');
+  const MH=['Time','MAP','Flow L/min','Gas L/min','FiO2','NS °C','Oxy °C','ACT','pH','pCO2','pO2','K+','Hct','Hb','Lac','SaO2'];
+  row(...MH);
+  d.monitor.forEach(r=>row(r.time,r.map,r.flow,r.gas,r.fio2,r.nstemp,r.oxytemp,r.act,r.ph,r.pco2,r.po2,r.k,r.hct,r.hb,r.lac,r.sao2));
+  row('');
+  row('CARDIOPLEGIA'); row('Time','Quantity (mL)'); d.cplegia.forEach(r=>row(r[0],r[1]));
+  row(''); row('URINE'); row('Time','Volume (mL)'); d.urine.forEach(r=>row(r[0],r[1]));
+  row(''); row('DRUGS'); row('Drug','Quantity','Time'); d.drugs.forEach(r=>row(r[0],r[1],r[2]));
+  row(''); row('BLOOD PRODUCTS'); row('Product','Unit No','Volume (mL)','Time'); d.blood.forEach(r=>row(r[0],r[1],r[2],r[3]));
+  row(''); row('DEVICES & RECOMMENDATION');
+  row('Device','Unit / Setting','Time'); d.devices.forEach(r=>row(r[0],r[1],r[2]));
+  DEVICES.forEach((n,i)=>{ if((d.checklist||{})['dev_'+i]) row(n,'(checked)',''); });
+  row(''); row('FLUID BALANCE'); row('Direction','Item','Volume (mL)');
+  INTAKE.forEach((n,i)=>row('Intake',n,F['in_'+i]||''));
+  OUTPUT.forEach((n,i)=>row('Output',n,F['out_'+i]||''));
+  row('Total','Intake',a.intake); row('Total','Output',a.output); row('Net','',a.net);
+  row(''); row('COMPLICATIONS');
+  if(a.complNone) row('No complications');
+  a.complications.forEach(c=>row(c));
+  if(F['complNotes']) row('Notes', F['complNotes']);
+  row(''); row('ANALYSIS SUMMARY');
+  row('Readings', a.readings);
+  if(a.flow) row('Flow L/min (min/mean/max)', fmt(a.flow.min,2), fmt(a.flow.mean,2), fmt(a.flow.max,2));
+  if(a.map)  row('MAP mmHg (min/mean/max)', fmt(a.map.min,0), fmt(a.map.mean,0), fmt(a.map.max,0));
+  if(a.temp) row('NS temp °C (min/max)', fmt(a.temp.min,1), fmt(a.temp.max,1));
+  if(a.act)  row('ACT s (min/max)', fmt(a.act.min,0), fmt(a.act.max,0));
+  if(a.hct)  row('Hct % (min/max)', fmt(a.hct.min,1), fmt(a.hct.max,1));
+  if(a.lac)  row('Lactate max', fmt(a.lac.max,1));
+  if(a.do2)  row('DO2i lowest', fmt(a.do2.min,0), a.do2.min<DO2I_CRIT?'BELOW 270 — review':'');
+  row('CPB min', a.cpb||''); row('Cross-clamp min', a.clamp||'');
+  row('Fluid net mL', a.net); row('Checklist', a.checklist);
+  return '﻿'+L.join('\r\n');   // BOM so Excel reads UTF-8 correctly
+}
+function exportExcel(){
+  renderAnalysis();
+  const blob=new Blob([buildCSV()],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const name=(v('name')||'record').replace(/[^a-z0-9]+/gi,'_');
+  a.href=url; a.download='bmh-perfusion-'+name+'.csv'; a.click();
+  URL.revokeObjectURL(url); flash('Excel (CSV) downloaded');
+}
+
+/* ── Email ─────────────────────────────────────────────────────────── */
+function emailSummary(){
+  const a=renderAnalysis();
+  const rng=s=>s?fmt(s.min,1)+'–'+fmt(s.max,1):'—';
+  const lines=[
+    'BENJAMIN MKAPA HOSPITAL — CPB PERFUSION SUMMARY','',
+    'Perf No: '+(v('perfNo')||'—'),
+    'Date: '+(v('date')||'—'),
+    'Patient: '+(v('name')||'—')+'   Reg: '+(v('regNo')||'—'),
+    'Procedure: '+(v('procedure')||'—'),
+    'Surgeon: '+(v('surgeon')||'—')+'   Perfusionist: '+(v('perfusionist')||'—'),
+    '',
+    'BSA: '+txt('mBsa')+' m²   Blood volume: '+txt('mEbv')+' mL',
+    'CPB time: '+(a.cpb||'—')+' min   Cross-clamp: '+(a.clamp||'—')+' min',
+    'Monitoring readings: '+a.readings,
+    'Flow mean: '+(a.flow?fmt(a.flow.mean,2):'—')+' L/min',
+    'MAP mean: '+(a.map?fmt(a.map.mean,0):'—')+' mmHg',
+    'NS temp: '+rng(a.temp)+' °C',
+    'ACT: '+rng(a.act)+' s',
+    'Hct: '+rng(a.hct)+' %   Lactate max: '+(a.lac?fmt(a.lac.max,1):'—'),
+    'DO2i lowest: '+(a.do2?fmt(a.do2.min,0):'—')+' mL/min/m²'+(a.do2&&a.do2.min<DO2I_CRIT?' (below 270)':''),
+    'Fluid net: '+(a.net>0?'+':'')+a.net+' mL',
+    'Pre-bypass checklist: '+a.checklist,
+    'Devices: '+(a.devices.length?a.devices.join(', '):'—'),
+    'Complications: '+(a.complNone?'None':(a.complications.join(', ')||'—')),
+    '',
+    'Full data attached as the exported Excel (CSV) file.'
+  ];
+  // Download the Excel file so the user can attach it (browsers can't auto-attach).
+  exportExcel();
+  const to=encodeURIComponent(v('emailTo')||'');
+  const subj=encodeURIComponent('CPB Perfusion Record — '+(v('name')||'patient')+' — '+(v('perfNo')||v('date')));
+  const body=encodeURIComponent(lines.join('\n'));
+  window.location.href='mailto:'+to+'?subject='+subj+'&body='+body;
+  flash('Email drafted — attach the downloaded file');
+}
+
+function clearAll(){
+  if(!confirm('Clear the whole record? This cannot be undone.')) return;
+  localStorage.removeItem(KEY); location.reload();
+}
+function flash(msg){
+  const s=document.getElementById('status'); s.textContent=msg;
+  clearTimeout(flash._t); flash._t=setTimeout(()=>{ s.textContent=''; },2000);
+}
+
+/* ── Init ──────────────────────────────────────────────────────────── */
+function init(){
+  document.getElementById('date').value=new Date().toISOString().slice(0,10);
+  buildChecklist(); buildGallery(); checklistProgress();
+  buildDevices(); buildComplications();
+  document.getElementById('photoInput').addEventListener('change', onPhotoPicked);
+  buildIntervals(); buildSites(); buildFluids();
+  for(let i=0;i<4;i++) addMonitorRow();
+  ['cplegia','urine'].forEach(id=>{ for(let i=0;i<3;i++) addPairRow(id); });
+  for(let i=0;i<3;i++) addDrugRow();
+  for(let i=0;i<3;i++) addBloodRow();
+  for(let i=0;i<2;i++) addDeviceRow();
+  // Save on any input change across the whole form.
+  document.addEventListener('input',()=>saveLocal(true));
+  if(localStorage.getItem(KEY)) loadLocal();
+  recalc();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
