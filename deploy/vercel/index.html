@@ -120,7 +120,9 @@
   <div class="toolbar">
     <button class="btn" onclick="saveLocal()">Save</button>
     <button class="btn sec" onclick="loadLocal()">Load saved</button>
+    <button class="btn sec" onclick="exportExcel()">Export Excel</button>
     <button class="btn sec" onclick="exportJSON()">Export JSON</button>
+    <button class="btn sec" onclick="analyseAndScroll()">Analyse</button>
     <button class="btn sec" onclick="window.print()">Print / PDF</button>
     <button class="btn warn" onclick="clearAll()">Clear</button>
     <span class="status" id="status"></span>
@@ -347,9 +349,30 @@
     </div>
   </div>
 
+  <!-- ── Analysis & summary ─────────────────────────────────────────── -->
+  <div class="card" id="analysisCard">
+    <h2>Analysis &amp; Summary</h2>
+    <div class="calc" id="analysis">
+      <div class="metric"><div class="k">Analysis</div><div class="v" style="font-size:15px">Press <em>Analyse</em></div></div>
+    </div>
+    <p class="note">Computed from the monitoring readings and fluid balance. Refreshes each time you press Analyse or Export Excel.</p>
+  </div>
+
+  <!-- ── Email ──────────────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Send by Email</h2>
+    <div class="grid g3" style="align-items:end">
+      <div style="grid-column:span 2"><label>Recipient email</label><input id="emailTo" type="email" placeholder="records@bmh.go.tz" /></div>
+      <div><button class="btn" style="width:100%" onclick="emailSummary()">Compose email</button></div>
+    </div>
+    <p class="note">Opens your email app with the case summary already written in the message.
+      Because browsers can’t attach files automatically, the Excel file is downloaded at the
+      same time — just attach it to the email before sending.</p>
+  </div>
+
   <p class="note" style="text-align:center;padding-bottom:24px">
     Benjamin Mkapa Hospital · Perfusio standalone record · saves to this browser only ·
-    export JSON for the record system.
+    export Excel / JSON for the record system.
   </p>
 </div>
 
@@ -778,6 +801,179 @@ function exportJSON(){
   a.href=url; a.download='bmh-perfusion-'+name+'.json'; a.click();
   URL.revokeObjectURL(url); flash('Exported JSON');
 }
+/* ── Analysis ──────────────────────────────────────────────────────── */
+function txt(id){ const e=document.getElementById(id); return e?e.textContent:''; }
+function seriesOf(monitor,col){ return monitor.map(r=>num(r[col])).filter(x=>x!=null); }
+function stat(a){ if(!a.length) return null;
+  const s=a.reduce((x,y)=>x+y,0); return {n:a.length,min:Math.min(...a),max:Math.max(...a),mean:s/a.length}; }
+function fmt(x,d){ return x==null?'—':(Math.round(x*Math.pow(10,d||0))/Math.pow(10,d||0)); }
+function analyse(){
+  const d=collect(), m=d.monitor, bsa=currentBSA();
+  const do2=[];
+  m.forEach(r=>{ const hb=num(r.hb),s=num(r.sao2),f=num(r.flow),po=num(r.po2);
+    if(bsa&&hb!=null&&s!=null&&f!=null) do2.push(computeDo2i(hb,s/100,po!=null?po:150,f,bsa)); });
+  let inT=0,outT=0;
+  INTAKE.forEach((_,i)=>inT+=num(v('in_'+i))||0);
+  OUTPUT.forEach((_,i)=>outT+=num(v('out_'+i))||0);
+  let chkDone=0; CHECKLIST.forEach((_,i)=>{const cb=document.getElementById('chk_'+i);if(cb&&cb.checked)chkDone++;});
+  const compl=COMPLICATIONS.filter((_,i)=>{const cb=document.getElementById('comp_'+i);return cb&&cb.checked;});
+  const devs=DEVICES.filter((_,i)=>{const cb=document.getElementById('dev_'+i);return cb&&cb.checked;});
+  return {
+    readings:m.length,
+    flow:stat(seriesOf(m,'flow')), map:stat(seriesOf(m,'map')), temp:stat(seriesOf(m,'nstemp')),
+    act:stat(seriesOf(m,'act')), hct:stat(seriesOf(m,'hct')), lac:stat(seriesOf(m,'lac')),
+    do2:stat(do2),
+    cpb:v('int_tot_0'), clamp:v('int_tot_1'),
+    intake:inT, output:outT, net:inT-outT,
+    checklist:chkDone+' / '+CHECKLIST.length,
+    devices:devs, complications:compl,
+    complNone:(document.getElementById('complNone')||{}).checked
+  };
+}
+function tile(k,val,unit,tone){
+  return '<div class="metric'+(tone?' '+tone:'')+'"><div class="k">'+k+'</div>'
+    +'<div class="v">'+val+(unit?' <span class="u">'+unit+'</span>':'')+'</div></div>';
+}
+function renderAnalysis(){
+  const a=analyse();
+  const rng=s=>s?fmt(s.min,1)+'–'+fmt(s.max,1):'—';
+  const box=document.getElementById('analysis');
+  const lowDo2 = a.do2 && a.do2.min<DO2I_CRIT;
+  box.innerHTML=
+    tile('Monitoring readings', a.readings, '')
+   +tile('Flow (mean)', a.flow?fmt(a.flow.mean,2):'—', 'L/min')
+   +tile('MAP (mean)', a.map?fmt(a.map.mean,0):'—', 'mmHg')
+   +tile('NS temp range', rng(a.temp), '°C')
+   +tile('ACT range', rng(a.act), 's')
+   +tile('Hct range', rng(a.hct), '%')
+   +tile('Lactate (max)', a.lac?fmt(a.lac.max,1):'—', 'mmol/L')
+   +tile('DO₂i (lowest)', a.do2?fmt(a.do2.min,0):'—', 'mL/min/m²', lowDo2?'alert':'good')
+   +tile('CPB time', a.cpb||'—', 'min')
+   +tile('Cross-clamp', a.clamp||'—', 'min')
+   +tile('Fluid net', (a.net>0?'+':'')+a.net, 'mL')
+   +tile('Checklist', a.checklist, '')
+   +tile('Complications', a.complNone?'None':(a.complications.length||'0'), '', a.complications.length?'alert':'good');
+  return a;
+}
+function analyseAndScroll(){
+  renderAnalysis();
+  document.getElementById('analysisCard').scrollIntoView({behavior:'smooth',block:'start'});
+  flash('Analysis updated');
+}
+
+/* ── Excel (CSV) export ────────────────────────────────────────────── */
+function escCsv(x){ x=(x==null?'':String(x)); return /[",\n\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x; }
+function buildCSV(){
+  const d=collect(), a=analyse(), F=d.fields, L=[];
+  const row=(...c)=>L.push(c.map(escCsv).join(','));
+  row('Benjamin Mkapa Hospital — CPB Perfusion Record');
+  row('Exported', new Date().toLocaleString());
+  row('');
+  row('PATIENT & CASE');
+  [['Perf No','perfNo'],['Date','date'],['Reg No','regNo'],['Hospital No','hospNo'],['Name','name'],
+   ['Age','age'],['Sex','sex'],['Weight (kg)','weight'],['Height (cm)','height'],['Blood group','blood'],
+   ['Diagnosis','diagnosis'],['Procedure','procedure'],['Surgeon','surgeon'],['Anaesthesiologist','anaes'],
+   ['Perfusionist','perfusionist'],['Assistant','assistant'],['Oxygenator','oxyType'],['Oxy S/N','oxySn'],
+   ['Induction time','inductionTime'],['Cutting time','cuttingTime'],['Heparine time','heparinTime']
+  ].forEach(([lbl,id])=>row(lbl, F[id]||''));
+  row('');
+  row('CALCULATIONS');
+  [['BSA (m²)','mBsa'],['BMI','mBmi'],['Blood volume (mL)','mEbv'],['Target flow (L/min)','mFlow'],
+   ['Prime (mL)','mPrime'],['Heparin (IU)','mHep'],['Predicted Hct (%)','mHct'],
+   ['Predicted Hb (g/dL)','mHb'],['Protamine (mg)','mProt']].forEach(([lbl,id])=>row(lbl, txt(id)));
+  row('');
+  row('TIMES (ON / OFF / TOTAL min)');
+  row('Phase','On','Off','Total (min)');
+  INTERVALS.forEach((n,i)=>row(n, F['int_on_'+i]||'', F['int_off_'+i]||'', F['int_tot_'+i]||''));
+  row('');
+  row('SITE / SAT / PRESS');
+  row('Site','SAT (%)','Press (mmHg)');
+  SITES.forEach((n,i)=>row(n, F['site_sat_'+i]||'', F['site_pr_'+i]||''));
+  row('');
+  row('A.C.T (seconds)');
+  row('Baseline','Post heparin','On pump','Post protamin');
+  row(F['actBaseline']||'', F['actHeparin']||'', F['actPump']||'', F['actProtamin']||'');
+  row('');
+  row('MONITORING');
+  const MH=['Time','MAP','Flow L/min','Gas L/min','FiO2','NS °C','Oxy °C','ACT','pH','pCO2','pO2','K+','Hct','Hb','Lac','SaO2'];
+  row(...MH);
+  d.monitor.forEach(r=>row(r.time,r.map,r.flow,r.gas,r.fio2,r.nstemp,r.oxytemp,r.act,r.ph,r.pco2,r.po2,r.k,r.hct,r.hb,r.lac,r.sao2));
+  row('');
+  row('CARDIOPLEGIA'); row('Time','Quantity (mL)'); d.cplegia.forEach(r=>row(r[0],r[1]));
+  row(''); row('URINE'); row('Time','Volume (mL)'); d.urine.forEach(r=>row(r[0],r[1]));
+  row(''); row('DRUGS'); row('Drug','Quantity','Time'); d.drugs.forEach(r=>row(r[0],r[1],r[2]));
+  row(''); row('BLOOD PRODUCTS'); row('Product','Unit No','Volume (mL)','Time'); d.blood.forEach(r=>row(r[0],r[1],r[2],r[3]));
+  row(''); row('DEVICES & RECOMMENDATION');
+  row('Device','Unit / Setting','Time'); d.devices.forEach(r=>row(r[0],r[1],r[2]));
+  DEVICES.forEach((n,i)=>{ if((d.checklist||{})['dev_'+i]) row(n,'(checked)',''); });
+  row(''); row('FLUID BALANCE'); row('Direction','Item','Volume (mL)');
+  INTAKE.forEach((n,i)=>row('Intake',n,F['in_'+i]||''));
+  OUTPUT.forEach((n,i)=>row('Output',n,F['out_'+i]||''));
+  row('Total','Intake',a.intake); row('Total','Output',a.output); row('Net','',a.net);
+  row(''); row('COMPLICATIONS');
+  if(a.complNone) row('No complications');
+  a.complications.forEach(c=>row(c));
+  if(F['complNotes']) row('Notes', F['complNotes']);
+  row(''); row('ANALYSIS SUMMARY');
+  row('Readings', a.readings);
+  if(a.flow) row('Flow L/min (min/mean/max)', fmt(a.flow.min,2), fmt(a.flow.mean,2), fmt(a.flow.max,2));
+  if(a.map)  row('MAP mmHg (min/mean/max)', fmt(a.map.min,0), fmt(a.map.mean,0), fmt(a.map.max,0));
+  if(a.temp) row('NS temp °C (min/max)', fmt(a.temp.min,1), fmt(a.temp.max,1));
+  if(a.act)  row('ACT s (min/max)', fmt(a.act.min,0), fmt(a.act.max,0));
+  if(a.hct)  row('Hct % (min/max)', fmt(a.hct.min,1), fmt(a.hct.max,1));
+  if(a.lac)  row('Lactate max', fmt(a.lac.max,1));
+  if(a.do2)  row('DO2i lowest', fmt(a.do2.min,0), a.do2.min<DO2I_CRIT?'BELOW 270 — review':'');
+  row('CPB min', a.cpb||''); row('Cross-clamp min', a.clamp||'');
+  row('Fluid net mL', a.net); row('Checklist', a.checklist);
+  return '﻿'+L.join('\r\n');   // BOM so Excel reads UTF-8 correctly
+}
+function exportExcel(){
+  renderAnalysis();
+  const blob=new Blob([buildCSV()],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const name=(v('name')||'record').replace(/[^a-z0-9]+/gi,'_');
+  a.href=url; a.download='bmh-perfusion-'+name+'.csv'; a.click();
+  URL.revokeObjectURL(url); flash('Excel (CSV) downloaded');
+}
+
+/* ── Email ─────────────────────────────────────────────────────────── */
+function emailSummary(){
+  const a=renderAnalysis();
+  const rng=s=>s?fmt(s.min,1)+'–'+fmt(s.max,1):'—';
+  const lines=[
+    'BENJAMIN MKAPA HOSPITAL — CPB PERFUSION SUMMARY','',
+    'Perf No: '+(v('perfNo')||'—'),
+    'Date: '+(v('date')||'—'),
+    'Patient: '+(v('name')||'—')+'   Reg: '+(v('regNo')||'—'),
+    'Procedure: '+(v('procedure')||'—'),
+    'Surgeon: '+(v('surgeon')||'—')+'   Perfusionist: '+(v('perfusionist')||'—'),
+    '',
+    'BSA: '+txt('mBsa')+' m²   Blood volume: '+txt('mEbv')+' mL',
+    'CPB time: '+(a.cpb||'—')+' min   Cross-clamp: '+(a.clamp||'—')+' min',
+    'Monitoring readings: '+a.readings,
+    'Flow mean: '+(a.flow?fmt(a.flow.mean,2):'—')+' L/min',
+    'MAP mean: '+(a.map?fmt(a.map.mean,0):'—')+' mmHg',
+    'NS temp: '+rng(a.temp)+' °C',
+    'ACT: '+rng(a.act)+' s',
+    'Hct: '+rng(a.hct)+' %   Lactate max: '+(a.lac?fmt(a.lac.max,1):'—'),
+    'DO2i lowest: '+(a.do2?fmt(a.do2.min,0):'—')+' mL/min/m²'+(a.do2&&a.do2.min<DO2I_CRIT?' (below 270)':''),
+    'Fluid net: '+(a.net>0?'+':'')+a.net+' mL',
+    'Pre-bypass checklist: '+a.checklist,
+    'Devices: '+(a.devices.length?a.devices.join(', '):'—'),
+    'Complications: '+(a.complNone?'None':(a.complications.join(', ')||'—')),
+    '',
+    'Full data attached as the exported Excel (CSV) file.'
+  ];
+  // Download the Excel file so the user can attach it (browsers can't auto-attach).
+  exportExcel();
+  const to=encodeURIComponent(v('emailTo')||'');
+  const subj=encodeURIComponent('CPB Perfusion Record — '+(v('name')||'patient')+' — '+(v('perfNo')||v('date')));
+  const body=encodeURIComponent(lines.join('\n'));
+  window.location.href='mailto:'+to+'?subject='+subj+'&body='+body;
+  flash('Email drafted — attach the downloaded file');
+}
+
 function clearAll(){
   if(!confirm('Clear the whole record? This cannot be undone.')) return;
   localStorage.removeItem(KEY); location.reload();
