@@ -322,6 +322,31 @@
     <button class="btn sec addrow" onclick="addBloodRow()">+ Add</button>
   </div>
 
+  <!-- ── Devices & recommendation ───────────────────────────────────── -->
+  <div class="card">
+    <h2>Devices &amp; Recommendation</h2>
+    <p class="note" style="margin-top:0">Support the patient was placed on coming off bypass, and post-op recommendations.</p>
+    <div class="checklist" id="devices"></div>
+    <table style="margin-top:12px">
+      <thead><tr><th>Device / Recommendation</th><th>Unit No / Setting</th><th>Time</th></tr></thead>
+      <tbody id="deviceRows"></tbody>
+    </table>
+    <button class="btn sec addrow" onclick="addDeviceRow()">+ Add device / recommendation</button>
+  </div>
+
+  <!-- ── Complications ──────────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Complications</h2>
+    <div class="chkbar">
+      <label class="chk" style="margin:0"><input type="checkbox" id="complNone" onchange="toggleNoCompl()"><span><strong>No complications</strong> — uneventful bypass</span></label>
+    </div>
+    <div class="checklist" id="complications"></div>
+    <div style="margin-top:12px">
+      <label>Details / narrative</label>
+      <textarea id="complNotes" rows="3" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit;resize:vertical"></textarea>
+    </div>
+  </div>
+
   <p class="note" style="text-align:center;padding-bottom:24px">
     Benjamin Mkapa Hospital · Perfusio standalone record · saves to this browser only ·
     export JSON for the record system.
@@ -483,6 +508,64 @@ function checklistProgress(){
   c.classList.toggle('ready',ready);
 }
 
+/* ── Devices & recommendation ──────────────────────────────────────── */
+const DEVICES=[
+  'Intra-aortic balloon pump (IABP)','ECMO','Temporary epicardial pacing wires',
+  'Inotropic support','Vasopressor support','Inhaled nitric oxide',
+  'LVAD / RVAD','Cell saver used','Modified ultrafiltration (MUF)',
+  'Left atrial / PA line','Delayed sternal closure','Nitric / iNO weaning plan'
+];
+function buildDevices(){
+  const box=document.getElementById('devices');
+  DEVICES.forEach((text,i)=>{
+    const lab=el('label',{class:'chk'});
+    const cb=el('input',{type:'checkbox'}); cb.id='dev_'+i;
+    const sp=el('span'); sp.textContent=text;
+    cb.addEventListener('change',()=>{ lab.classList.toggle('done',cb.checked); saveLocal(true); });
+    lab.appendChild(cb); lab.appendChild(sp); box.appendChild(lab);
+  });
+}
+function addDeviceRow(d,u,t){
+  const tb=document.getElementById('deviceRows');
+  const tr=el('tr');
+  const dev=inp('text'), unit=inp('text'), time=inp('time');
+  if(d!=null)dev.value=d; if(u!=null)unit.value=u; if(t!=null)time.value=t;
+  [dev,unit,time].forEach(x=>x.addEventListener('input',()=>saveLocal(true)));
+  [dev,unit,time].forEach(x=>tr.appendChild(cell(x)));
+  tb.appendChild(tr);
+}
+
+/* ── Complications ─────────────────────────────────────────────────── */
+const COMPLICATIONS=[
+  'Difficult weaning from bypass','Low cardiac output','Arrhythmia',
+  'Excessive bleeding / coagulopathy','Aortic dissection','Air embolism',
+  'Protamine reaction','Haemolysis','Oxygenator / circuit failure',
+  'Clot in circuit','Hyperkalaemia','Renal impairment / low urine output',
+  'Neurological event','Malignant hyperthermia','Cannulation problem'
+];
+function buildComplications(){
+  const box=document.getElementById('complications');
+  COMPLICATIONS.forEach((text,i)=>{
+    const lab=el('label',{class:'chk'});
+    const cb=el('input',{type:'checkbox'}); cb.id='comp_'+i;
+    const sp=el('span'); sp.textContent=text;
+    cb.addEventListener('change',()=>{
+      lab.classList.toggle('done',cb.checked);
+      if(cb.checked){ const none=document.getElementById('complNone'); if(none) none.checked=false; }
+      saveLocal(true);
+    });
+    lab.appendChild(cb); lab.appendChild(sp); box.appendChild(lab);
+  });
+}
+function toggleNoCompl(){
+  const none=document.getElementById('complNone');
+  if(none && none.checked){
+    COMPLICATIONS.forEach((_,i)=>{ const cb=document.getElementById('comp_'+i);
+      if(cb){ cb.checked=false; const lab=cb.closest('.chk'); if(lab) lab.classList.remove('done'); } });
+  }
+  saveLocal(true);
+}
+
 /* ── Photo gallery — photos embedded as data URLs, no network ───────── */
 const PHOTO_SLOTS=['Circuit','Perfusion team','Checklist','Theatre'];
 let photos={};            // slotIndex -> dataURL
@@ -633,8 +716,8 @@ function fluidTotals(){
 const KEY='bmh-perfusion-record-v1';
 function collect(){
   const data={fields:{},checklist:{},photos:photos,monitor:[],cplegia:[],urine:[],drugs:[],blood:[],
-    intervals:[],sites:[],intake:[],output:[]};
-  document.querySelectorAll('input[id],select[id]').forEach(f=>{
+    devices:[],intervals:[],sites:[],intake:[],output:[]};
+  document.querySelectorAll('input[id],select[id],textarea[id]').forEach(f=>{
     if(f.type==='checkbox'){ data.checklist[f.id]=f.checked; }
     else { data.fields[f.id]=f.value; }
   });
@@ -645,6 +728,7 @@ function collect(){
     const ins=tr.querySelectorAll('input'); a.push([...ins].map(x=>x.value)); }); return a; };
   data.cplegia=pairs('cplegia'); data.urine=pairs('urine');
   data.drugs=pairs('drugs'); data.blood=pairs('bloodProducts');
+  data.devices=pairs('deviceRows');
   return data;
 }
 let saveTimer=null;
@@ -674,6 +758,7 @@ function loadLocal(){
     rebuildPairs('cplegia',data.cplegia); rebuildPairs('urine',data.urine);
     document.getElementById('drugs').innerHTML=''; (data.drugs||[]).forEach(r=>addDrugRow(r[0],r[1],r[2]));
     document.getElementById('bloodProducts').innerHTML=''; (data.blood||[]).forEach(r=>addBloodRow(r[0],r[1],r[2],r[3]));
+    document.getElementById('deviceRows').innerHTML=''; (data.devices||[]).forEach(r=>addDeviceRow(r[0],r[1],r[2]));
     recalc(); fluidTotals(); recalcMonitor();
     // restore interval totals
     INTERVALS.forEach((_,i)=>{ const on=v('int_on_'+i),off=v('int_off_'+i);
@@ -706,12 +791,14 @@ function flash(msg){
 function init(){
   document.getElementById('date').value=new Date().toISOString().slice(0,10);
   buildChecklist(); buildGallery(); checklistProgress();
+  buildDevices(); buildComplications();
   document.getElementById('photoInput').addEventListener('change', onPhotoPicked);
   buildIntervals(); buildSites(); buildFluids();
   for(let i=0;i<4;i++) addMonitorRow();
   ['cplegia','urine'].forEach(id=>{ for(let i=0;i<3;i++) addPairRow(id); });
   for(let i=0;i<3;i++) addDrugRow();
   for(let i=0;i<3;i++) addBloodRow();
+  for(let i=0;i<2;i++) addDeviceRow();
   // Save on any input change across the whole form.
   document.addEventListener('input',()=>saveLocal(true));
   if(localStorage.getItem(KEY)) loadLocal();
